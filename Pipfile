@@ -1,0 +1,31 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+
+[packages]
+funcy = "*"
+rollbar = "*"
+toolz = "*"
+ujson = "*"
+SQLAlchemy = "*"
+aiohttp = "*"
+aiomysql = "*"
+jsonrpcserver = "*"
+jsonrpcclient = "*"
+
+[requires]
+python_version = "3.5"
+
+[dev-packages]
+ipython = "*"
+pep8 = "*"
+pytest = "*"
+pytest-console-scripts = "*"
+pytest-docker = "*"
+pytest-pylint = "*"
+recommonmark = "*"
+sphinxcontrib-programoutput = "*"
+sphinxcontrib-restbuilder = "*"
+yapf = "*"
+Sphinx = "*"
+autopep8 = "*"

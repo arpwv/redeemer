@@ -87,6 +87,7 @@ celerybeat-schedule
 venv/
 ENV/
 
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -99,3 +100,15 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# pycharm
+.idea
+
+# envdir
+envd
+
+# mysql
+my.cnf
+
+# pipenv
+Pipfile.lock
