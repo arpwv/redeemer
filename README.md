@@ -5,7 +5,11 @@
 ### functions
 1. list all accounts with delegated steem power
 2. review activity of those accounts
-3. revoke or extend delegated steem power based on account activity rules TBD
+3. revoke or extend delegated steem power based on account activity rules
+  -  posts
+  - comments
+  - votes
+  - follows
 
 
 ### deployment
