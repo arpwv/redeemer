@@ -37,3 +37,6 @@ fmt:
 
 sql:
 	MYSQL_HOME=$(ROOT_DIR) mysql
+
+ipython:
+	envdir envd pipenv run ipython -i ipython_init.py
