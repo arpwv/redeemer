@@ -11,8 +11,10 @@ import statistics
 import sqlalchemy as sa
 from sqlalchemy import func
 from sqlalchemy import select, and_, text, union_all, alias
+from sqlalchemy import cast, Integer
 
 import maya
+from terminaltables import AsciiTable
 
 import http_client
 
@@ -40,7 +42,7 @@ FOLLOWS_TABLE = 'sbds_tx_custom_jsons'
 
 # de-delegation config
 DELEGATION_ACCOUNT_CREATOR = 'steem'
-MIN_ACCOUNT_AGE_DAYS = 30
+MIN_ACCOUNT_AGE_DAYS = 0
 INCLUSIVE_VOTES_THRESHOLD = 2
 INCLUSIVE_COMMENTS_THRESHOLD = 2
 INCLUSIVE_POSTS_THRESHOLD = 2
@@ -56,7 +58,7 @@ db_url = os.environ['DATABASE_URL']
 engine = sa.create_engine(db_url,
                           server_side_cursors=True,
                           encoding='utf8',
-                          echo=True,
+                          echo=False,
                           execution_options=dict(stream_results=True))
 meta = sa.MetaData()
 meta.reflect(bind=engine)
@@ -106,6 +108,13 @@ def parse_amount(amount_str):
         number = int(number)
     return number, symbol
 
+def print_table(*args, **kwargs):
+    tbl = AsciiTable(*args, **kwargs)
+    print()
+    print(tbl.table)
+    print()
+
+
 def filter_zero_delegations(accounts):
     for acct in accounts:
        delegated_vests, _ = parse_amount(acct['received_vesting_shares'])
@@ -122,13 +131,14 @@ def compute_undelegation_ops(accounts):
         delegated_vests, _ = parse_amount(acct['received_vesting_shares'])
 
         undelegate_vests = delegated_vests - INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS + acct_vests
-        if undelegate_vests > delegated_vests:
+        if undelegate_vests >= delegated_vests:
             undelegate_vests = delegated_vests
         op_vesting_shares = delegated_vests - undelegate_vests
         ops.append(Operation(acct, undelegate_vests, op_vesting_shares))
         new_balance = acct_vests + delegated_vests - undelegate_vests
+        logger.debug('OPERATION: %s delegated %s --> undelegate %s VESTS --> new balance %s VESTS', name, delegated_vests,undelegate_vests, new_balance)
         assert new_balance >= INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS
-        #print('OPERATION: %s delegated %s --> undelegate %s VESTS --> new balance %s VESTS' % (name, delegated_vests,undelegate_vests, new_balance))
+
     return ops
 
 
@@ -155,8 +165,7 @@ def perform_undelegation_ops(ops, no_broadcast=False):
             fails.append(op)
         else:
             successes.append(op)
-    print('successes: %s%% (%s)' % ((len(successes)/len(ops)*100), len(successes)))
-    print('fails: %s%% (%s)' %  ((len(fails)/len(ops)*100), len(fails)))
+
     return successes, fails
 
 
@@ -165,8 +174,10 @@ def perform_undelegation_ops(ops, no_broadcast=False):
 all_accounts_query = select([accounts_tbl.c.new_account_name]) \
     .where(and_(
         accounts_tbl.c.timestamp <= INCLUSIVE_MAX_CREATION_DATE,
-        accounts_tbl.c.creator == DELEGATION_ACCOUNT_CREATOR
+        accounts_tbl.c.creator == DELEGATION_ACCOUNT_CREATOR,
+        accounts_tbl.c.delegation > 0
 ))
+print('querying db for accounts, be patient...')
 results = run_query(engine, all_accounts_query)
 accounts = [row[0] for row in results]
 
@@ -174,24 +185,47 @@ accounts = [row[0] for row in results]
 steemd_accounts = get_steemd_accounts(accounts)
 
 # filter accounts
-print('accounts before zero delegation filter: %s' %  len(steemd_accounts))
+
+print('filtering accounts...')
+print('filter accounts with no delegations')
+before = len(steemd_accounts)
 filtered_accounts = list(filter_zero_delegations(steemd_accounts))
-print('accounts after zero delegation filter filter: %s' % len(filtered_accounts))
+after = len(filtered_accounts)
+table_data=[
+    ['before','after'],
+    [before, after]
+]
+print_table(table_data=table_data, title='Filter Results')
+
 
 # compute undelegation operations
-print('computing undelegation ops')
+print('computing undelegation ops...')
 ops = compute_undelegation_ops(filtered_accounts)
+
 print('total undelegation operations: %s' % len(ops))
+
 total_undelegated_vests = sum(op[1] for op in ops)
 total_undelegated_sp = converter.vests_to_sp(total_undelegated_vests)
 mean_undelegation_vests = statistics.mean(op[1] for op in ops)
 median_undelegation_vests = statistics.median(op[1] for op in ops)
 mean_undelegation_sp = converter.vests_to_sp(mean_undelegation_vests)
 median_undelegation_sp = converter.vests_to_sp(median_undelegation_vests)
-print('total undelegation amount: vests:%s sp:%s' % (total_undelegated_vests, total_undelegated_sp))
-print('mean undelegation vests: %s sp: %s' % (mean_undelegation_vests, mean_undelegation_sp))
-print('median undelegationvests: %s sp: %s' % (median_undelegation_vests, median_undelegation_sp))
+
+table_data = [
+    ['Metric','VESTS', 'SP'],
+    ['total undelegated', total_undelegated_vests, total_undelegated_sp],
+    ['mean undelegated', mean_undelegation_vests, mean_undelegation_sp],
+    ['median undelegated', median_undelegation_vests, median_undelegation_sp]
+]
+print_table(table_data=table_data, title='To Be Un-Delegated Metrics')
+
 
 # build and broadcast undelegation operations
 NO_BROADCAST_TRANSACTIONS = False
 successes, fails = perform_undelegation_ops(ops, no_broadcast=NO_BROADCAST_TRANSACTIONS)
+table_data = [
+    ['result','percent', 'count'],
+    ['success',len(successes)/len(ops)*100, len(successes)],
+    ['fail', len(fails)/len(ops)*100, len(fails)]
+ ]
+print_table(table_data=table_data, title='Broadcast Results')
