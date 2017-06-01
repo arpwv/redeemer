@@ -13,9 +13,9 @@ import certifi
 import urllib3
 from urllib3.connection import HTTPConnection
 
-import sbds.sbds_logging
 
-logger = sbds.sbds_logging.getLogger(__name__)
+
+logger = logging.getLogger(__name__)
 
 
 class RPCError(Exception):
@@ -53,7 +53,7 @@ class SimpleSteemAPIClient(object):
     """
 
     def __init__(self, url=None, log_level=logging.INFO, **kwargs):
-        url = url or os.environ.get('STEEMD_HTTP_URL')
+        url = url or os.environ.get('STEEMD_HTTP_URL', 'https://steemd.steemitdev.com')
         self.url = url
         self.hostname = urlparse(url).hostname
         self.return_with_args = kwargs.get('return_with_args', False)
@@ -91,8 +91,8 @@ class SimpleSteemAPIClient(object):
         '''
         self.request = partial(self.http.urlopen, 'POST', url)
 
-        _logger = sbds.sbds_logging.getLogger('urllib3')
-        sbds.sbds_logging.configure_existing_logger(_logger, level=log_level)
+        _logger = logging.getLogger('urllib3')
+
 
     @staticmethod
     def json_rpc_body(name, *args, as_json=True):

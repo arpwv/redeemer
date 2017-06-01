@@ -40,3 +40,9 @@ sql:
 
 ipython:
 	envdir envd pipenv run ipython -i ipython_init.py
+
+notebook:
+	envdir envd pipenv run jupyter notebook
+
+steem:
+	env LDFLAGS="-L$(brew --prefix openssl)/lib" CFLAGS="-I$(brew --prefix openssl)/include" pipenv install steem
