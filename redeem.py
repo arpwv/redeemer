@@ -206,16 +206,24 @@ print('total undelegation operations: %s' % len(ops))
 
 total_undelegated_vests = sum(op[1] for op in ops)
 total_undelegated_sp = converter.vests_to_sp(total_undelegated_vests)
-mean_undelegation_vests = statistics.mean(op[1] for op in ops)
-median_undelegation_vests = statistics.median(op[1] for op in ops)
+mean_undelegation_vests = statistics.mean(op.undelegate_vests for op in ops)
+median_undelegation_vests = statistics.median(op.undelegate_vests for op in ops)
+try:
+    mode_undelegation_vests = statistics.mode(op.undelegate_vests for op in ops)
+except Exception as e:
+    mode_undelegation_vests = None
 mean_undelegation_sp = converter.vests_to_sp(mean_undelegation_vests)
 median_undelegation_sp = converter.vests_to_sp(median_undelegation_vests)
-
+if mode_undelegation_vests:
+    mode_undelegation_sp = converter.vests_to_sp(mode_undelegation_vests)
+else:
+    mode_undelegation_sp = None
 table_data = [
     ['Metric','VESTS', 'SP'],
     ['total undelegated', total_undelegated_vests, total_undelegated_sp],
     ['mean undelegated', mean_undelegation_vests, mean_undelegation_sp],
-    ['median undelegated', median_undelegation_vests, median_undelegation_sp]
+    ['median undelegated', median_undelegation_vests, median_undelegation_sp],
+    ['mode undelegated', mode_undelegation_vests, mode_undelegation_sp]
 ]
 print_table(table_data=table_data, title='To Be Un-Delegated Metrics')
 
