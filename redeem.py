@@ -1,12 +1,11 @@
 # coding=utf-8
 import os
-import json
-from collections import Counter
+
+from collections import namedtuple
 from datetime import datetime
 from datetime import timedelta
 import itertools as it
-import time
-import decimal
+import logging
 import statistics
 
 import sqlalchemy as sa
@@ -20,6 +19,12 @@ import http_client
 # steemd tools
 from steem import Steem
 import steem.converter
+from steem.transactionbuilder import TransactionBuilder
+from steembase import operations
+
+logger = logging.getLogger(__name__)
+
+# python steem
 steem_client = Steem(nodes=['https://steemd.steemit.com'])
 converter = steem.converter.Converter()
 
@@ -46,14 +51,6 @@ INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 5 # in sp
 INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)
 
 
-# steemd account filters
-STEEMD_ACCOUNT_FILTERS = {
-    'lifetime_vote_count': INCLUSIVE_VOTES_THRESHOLD,
-    'comment_count': INCLUSIVE_COMMENTS_THRESHOLD,
-    'post_count': INCLUSIVE_COMMENTS_THRESHOLD,
-    'received_vesting_shares': "0.000000 VESTS",
-}
-
 # db config
 db_url = os.environ['DATABASE_URL']
 engine = sa.create_engine(db_url,
@@ -63,24 +60,21 @@ engine = sa.create_engine(db_url,
                           execution_options=dict(stream_results=True))
 meta = sa.MetaData()
 meta.reflect(bind=engine)
-
 accounts_tbl = meta.tables[ACCOUNTS_TABLE]
 votes_tbl = meta.tables[VOTES_TABLE]
 comments_tbl = meta.tables[COMMENTS_TABLE]
 follows_tbl = meta.tables[FOLLOWS_TABLE]
 
 
+Operation = namedtuple('Operation', ['account', 'undelegate_vests', 'op_vesting_shares'])
+
+
+# functions used below
 def run_query(engine, query):
     with engine.connect() as conn:
         results = conn.execute(query).fetchall()
     return results
 
-def get_account_names(engine, query):
-    results = run_query(engine, query)
-    return map(get_steemd_accounts, (r[0] for r in results))
-
-def merge_results(*args):
-    return list(it.chain(*args))
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -130,115 +124,74 @@ def compute_undelegation_ops(accounts):
         undelegate_vests = delegated_vests - INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS + acct_vests
         if undelegate_vests > delegated_vests:
             undelegate_vests = delegated_vests
-
-        ops.append(tuple([acct, undelegate_vests]))
+        op_vesting_shares = delegated_vests - undelegate_vests
+        ops.append(Operation(acct, undelegate_vests, op_vesting_shares))
         new_balance = acct_vests + delegated_vests - undelegate_vests
         assert new_balance >= INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS
         #print('OPERATION: %s delegated %s --> undelegate %s VESTS --> new balance %s VESTS' % (name, delegated_vests,undelegate_vests, new_balance))
     return ops
 
 
-# vote activity sub-query
-votes_stmt = select([votes_tbl.c.voter])\
-    .where(votes_tbl.c.voter == accounts_tbl.c.new_account_name)\
-    .group_by(votes_tbl.c.voter)\
-    .having(func.count(votes_tbl.c.voter) <= INCLUSIVE_VOTES_THRESHOLD)
+def perform_undelegation_ops(ops, no_broadcast=False):
+    successes = []
+    fails = []
+    for op in ops:
+        try:
+            tb = TransactionBuilder(no_broadcast=no_broadcast)
+            steem_op = {
+                'to_account':op.account['name'],
+                'vesting_shares': op.op_vesting_shares,
+                'account': DELEGATION_ACCOUNT_CREATOR
+            }
+            steem_op = operations.DelegateVestingShares(**steem_op)
+            print(steem_op)
+            tb.appendOps([steem_op])
+            tb.appendSigner(DELEGATION_ACCOUNT_CREATOR, 'active')
+            tb.sign()
+            tx = tb.broadcast()
+            print(tx)
+        except Exception as e:
+            logger.debug(e)
+            fails.append(op)
+        else:
+            successes.append(op)
+    print('successes: %s%% (%s)' % ((len(successes)/len(ops)*100), len(successes)))
+    print('fails: %s%% (%s)' %  ((len(fails)/len(ops)*100), len(fails)))
+    return successes, fails
 
 
-# comment activity sub-query
-comments_stmt = select([comments_tbl.c.author])\
-    .where(comments_tbl.c.author == accounts_tbl.c.new_account_name)\
-    .group_by(comments_tbl.c.author)\
-    .having(func.count(comments_tbl.c.author) <= INCLUSIVE_COMMENTS_THRESHOLD)
 
-# follows activity sub-query
-follows_stmt = select([func.json_unquote(func.json_extract(follows_tbl.c.json, '$.follower')).label('follower')])\
-    .where(follows_tbl.c.tid == 'follow')\
-    .group_by('follower')\
-    .having(and_(
-        func.count('follower') <= INCLUSIVE_FOLLOWS_THRESHOLD,
-        text('follower') == accounts_tbl.c.new_account_name
-    ))
-
-
-main_query = select([accounts_tbl.c.new_account_name])\
-    .where(and_(
-        accounts_tbl.c.timestamp <= INCLUSIVE_MAX_CREATION_DATE,
-        accounts_tbl.c.creator == DELEGATION_ACCOUNT_CREATOR,
-        accounts_tbl.c.new_account_name.in_(union_all(votes_stmt, comments_stmt))
-    ))
-
-
-# seperate query for followers, slow due to json parsing
-follows_query = select([func.json_extract(follows_tbl.c.json, '$.follower').label('follower')]) \
-    .where(follows_tbl.c.tid == 'follow')\
-    .group_by('follower')\
-    .having(func.count('follower') <= INCLUSIVE_FOLLOWS_THRESHOLD)
-
+# collect account names with delegations
 all_accounts_query = select([accounts_tbl.c.new_account_name]) \
     .where(and_(
         accounts_tbl.c.timestamp <= INCLUSIVE_MAX_CREATION_DATE,
         accounts_tbl.c.creator == DELEGATION_ACCOUNT_CREATOR
 ))
-
 results = run_query(engine, all_accounts_query)
-
 accounts = [row[0] for row in results]
 
+# get accounts from account names
 steemd_accounts = get_steemd_accounts(accounts)
 
-
-
+# filter accounts
 print('accounts before zero delegation filter: %s' %  len(steemd_accounts))
 filtered_accounts = list(filter_zero_delegations(steemd_accounts))
 print('accounts after zero delegation filter filter: %s' % len(filtered_accounts))
-print()
 
+# compute undelegation operations
 print('computing undelegation ops')
 ops = compute_undelegation_ops(filtered_accounts)
-
-
-'''
-print('accounts before post_count filter: %s' % len(steemd_accounts))
-filtered_accounts = list(filter(lambda a:a['post_count'] <= INCLUSIVE_POSTS_THRESHOLD, steemd_accounts ))
-print('accounts after post_count filter: %s' %  len(filtered_accounts))
-print()
-
-print('accounts before comment_count filter: %s' %  len(filtered_accounts))
-filtered_accounts = list(filter(lambda a:a['comment_count'] <= INCLUSIVE_COMMENTS_THRESHOLD, filtered_accounts))
-print('accounts after comment_count filter: %s' %  len(filtered_accounts))
-print()
-
-print('accounts before lifetime_vote_count filter: %s' %  len(filtered_accounts))
-filtered_accounts = list(filter(lambda a:a['lifetime_vote_count'] <= INCLUSIVE_VOTES_THRESHOLD, filtered_accounts))
-print('accounts after lifetime_vote_count filter: %s' %  len(filtered_accounts))
-print()
-
-#print('accounts before followers filter: %s' %  len(filtered_accounts))
-#filtered_accounts = list(filter_followers(filtered_accounts))
-#print('accounts after followers filter filter: %s' % len(filtered_accounts))
-#print()
-
-ops = high_balances_ops(filtered_accounts)
-'''
-
 print('total undelegation operations: %s' % len(ops))
 total_undelegated_vests = sum(op[1] for op in ops)
 total_undelegated_sp = converter.vests_to_sp(total_undelegated_vests)
 mean_undelegation_vests = statistics.mean(op[1] for op in ops)
 median_undelegation_vests = statistics.median(op[1] for op in ops)
-
-
 mean_undelegation_sp = converter.vests_to_sp(mean_undelegation_vests)
 median_undelegation_sp = converter.vests_to_sp(median_undelegation_vests)
-
-
 print('total undelegation amount: vests:%s sp:%s' % (total_undelegated_vests, total_undelegated_sp))
 print('mean undelegation vests: %s sp: %s' % (mean_undelegation_vests, mean_undelegation_sp))
 print('median undelegationvests: %s sp: %s' % (median_undelegation_vests, median_undelegation_sp))
 
-
-
-
-
-
+# build and broadcast undelegation operations
+NO_BROADCAST_TRANSACTIONS = False
+successes, fails = perform_undelegation_ops(ops, no_broadcast=NO_BROADCAST_TRANSACTIONS)
