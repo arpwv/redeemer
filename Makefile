@@ -7,8 +7,10 @@ PROJECT := $(shell basename $(ROOT_DIR))
 ENV_DIR := $(ROOT_DIR)/envd
 
 ENVDIR := envdir $(ENV_DIR)
+PIPENV := $(ENVDIR) pipenv
+PYTHON := $(PIPENV) run python3
 
-PYTHON := pipenv run python3
+WIF_FILE := steem-active.txt
 
 default: build
 
@@ -16,8 +18,8 @@ default: build
 
 init:
 	pip3 install pipenv
-	pipenv lock
-	pipenv install --three --dev
+	$(PIPENV) lock
+	$(PIPENV) install --three --dev
 
 build:
 	docker build -t steemit/$(PROJECT) .
@@ -39,10 +41,20 @@ sql:
 	MYSQL_HOME=$(ROOT_DIR) mysql
 
 ipython:
-	envdir envd pipenv run ipython -i ipython_init.py
+	$(PIPENV) run ipython -i redeem.py
 
 notebook:
-	envdir envd pipenv run jupyter notebook
+	$(PIPENV) run jupyter notebook
 
-steem:
-	env LDFLAGS="-L$(brew --prefix openssl)/lib" CFLAGS="-I$(brew --prefix openssl)/include" pipenv install steem
+install-steem-macos:
+	brew install openssl
+	env LDFLAGS="-L$(brew --prefix openssl)/lib" CFLAGS="-I$(brew --prefix openssl)/include" $(PIPENV) install steem
+
+undelegation_ops.json: clean-data
+	$(PYTHON) $(ROOT_DIR)/step1__get_undelegation_ops.py
+
+broadcasted_undelegations.json: undelegation_ops.json
+	$(PYTHON) step2_sign_with_wif.py $< $(WIF_FILE)
+
+clean-data:
+	-rm ./*.json
