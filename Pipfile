@@ -18,19 +18,9 @@ Sphinx = "*"
 jupyter = "*"
 
 [packages]
-funcy = "*"
-rollbar = "*"
 toolz = "*"
-ujson = "*"
-aiohttp = "*"
-cchardet = "*"
-uvloop = "*"
-aiomysql = "*"
-mysqlclient = "*"
-SQLAlchemy = "*"
 pycrypto = "*"
 steem = "*"
-maya = "*"
 terminaltables = "*"
 
 [requires]

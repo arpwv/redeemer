@@ -1,19 +1,17 @@
 #! /usr/bin/env python3
 # coding=utf-8
+import argparse
 import os
-
 import json
-from collections import namedtuple
 import itertools as it
 import logging
 import statistics
+import sys
 
-import sqlalchemy as sa
+from collections import namedtuple
 
-from sqlalchemy import select, and_
 from terminaltables import AsciiTable
-
-import http_client
+from toolz.dicttoolz import get_in
 
 # steemd tools
 from steem import Steem
@@ -21,32 +19,21 @@ import steem.converter
 from steembase import operations
 from steem.amount import Amount
 
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# python steem
-steem_client = Steem(nodes=['https://steemd.steemit.com'], no_broadcast=True)
+
 converter = steem.converter.Converter()
-
-# steemd client
-client = http_client.SimpleSteemAPIClient()
-
-# sbds sql config
-ACCOUNTS_TABLE = 'sbds_tx_account_create_with_delegations'
 
 # de-delegation config
 DELEGATION_ACCOUNT_CREATOR = 'steem'
 DELEGATION_ACCOUNT_WIF = None
-INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 5 # in sp
+INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 15 # in sp
 INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
 TRANSACTION_EXPIRATION = 60 * 60 * 24 # 1 day
+OPS_PER_TRANSACTION = 100
+STEEMD_NODES = ['https://steemd.steemit.com']
 
-# db config
-DB_URL = os.environ['DATABASE_URL']
-DB_ENGINE = sa.create_engine(DB_URL,
-                          server_side_cursors=True,
-                          encoding='utf8',
-                          echo=False,
-                          execution_options=dict(stream_results=True))
 
 
 
@@ -64,12 +51,6 @@ OperationMetric = namedtuple('OperationMetric', ['name',
 # ----------------------
 # Utility Functions
 # ----------------------
-def run_query(engine, query):
-    with engine.connect() as conn:
-        results = conn.execute(query).fetchall()
-    return results
-
-
 def chunkify(iterable, chunksize=10000):
     i = 0
     chunk = []
@@ -91,16 +72,8 @@ def print_table(*args, **kwargs):
     print()
 
 
-def get_steemd_accounts(accounts):
-    groups = chunkify(accounts, 100)
-    grouped_accounts = []
-    for group in groups:
-        grouped_accounts.append(client.exec('get_accounts', list(group)))
-    return list(it.chain.from_iterable(grouped_accounts))
-
-
 def compute_undelegation_ops(accounts):
-    # remove all but 5, or leave all
+    # remove all but INCLUSIVE_LOWER_BALANCE_LIMIT_SP, or leave all
     op_metrics = []
     steem_ops = []
     for acct in accounts:
@@ -148,42 +121,39 @@ def compute_undelegation_ops(accounts):
 # ----------------------
 
 # step 1
-def get_account_names_from_db():
-    # collect account names with delegations
-    try:
-        with open('accounts.json') as f:
-            accounts = json.load(f)
-    except:
-        meta = sa.MetaData()
-        meta.reflect(bind=DB_ENGINE)
-        accounts_tbl = meta.tables[ACCOUNTS_TABLE]
-        all_accounts_query = select([accounts_tbl.c.new_account_name]) \
-            .where(and_(
-                accounts_tbl.c.creator == DELEGATION_ACCOUNT_CREATOR,
-                accounts_tbl.c.delegation > 0
-        ))
-        results = run_query(DB_ENGINE, all_accounts_query)
-        accounts = [row[0] for row in results]
-        with open('accounts.json', 'w') as f:
-            json.dump(accounts, f)
-
-    return accounts
-
+def get_accounts_from_steemd(account='steem'):
+    steem = Steem(nodes=STEEMD_NODES, no_broadcast=True)
+    total_transactions_in_account = steem.get_account_history(account,-1,1)[0][0]
+    logger.debug('total transactions for %s account to review: %s', account, total_transactions_in_account)
+    offset = -1
+    limit = 10000
+    results_count = 0
+    offset_path = (0,0)
+    op_path = (1,'op',0)
+    account_path = (1,'op',1,'new_account_name')
+    while True:
+        logger.debug('result count: %s offset:%s',results_count, offset)
+        try:
+            r = steem.get_account_history(account, offset, limit)
+            results_count += len(r)
+            ops = filter(lambda o: get_in(op_path,o)=='account_create_with_delegation', r)
+            account_names = [get_in(account_path,o) for o in ops]
+            logger.debug('filtered %s ops to %s account names', limit, len(account_names))
+            logger.debug('fetching %s accounts from steemd', len(account_names))
+            if account_names:
+                accounts = steem.get_accounts(account_names)
+                if not accounts:
+                    continue
+                yield accounts
+            offset = get_in(offset_path, r) - 1
+            if offset <= 1:
+                break
+            if offset < limit:
+                offset = limit
+        except Exception as e:
+            logger.exception('Ignoring this error')
 
 # step 2
-def get_steem_accounts_from_names(account_names):
-    # get accounts from account names
-    try:
-        with open('steem_accounts.json') as f:
-            steemd_accounts = json.load(f)
-    except:
-        steemd_accounts = get_steemd_accounts(account_names)
-        with open('steem_accounts.json','w') as f:
-            json.dump(steemd_accounts, f)
-    return steemd_accounts
-
-
-# step 3
 def get_undelegation_ops(steemd_accounts):
     # compute undelegation operations
     ops, steem_ops = compute_undelegation_ops(steemd_accounts)
@@ -192,7 +162,7 @@ def get_undelegation_ops(steemd_accounts):
     return ops, steem_ops
 
 
-# step 4
+# step 3
 def show_undelegation_stats(op_metrics):
     print('min acct balance after undelegation %s SP (%s)' % (
     INCLUSIVE_LOWER_BALANCE_LIMIT_SP, INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS))
@@ -268,19 +238,60 @@ def show_undelegation_stats(op_metrics):
     print_table(table_data=table_data, title='Before/After Acct Stats')
 
 
-def main():
-    print('getting list of accounts from db, be patient...')
-    accounts = get_account_names_from_db()
+def build_and_sign(ops=None, key=None, chunksize=OPS_PER_TRANSACTION, no_broadcast=True):
+    from steem.transactionbuilder import TransactionBuilder
+    from steembase import operations
+    if key:
+        s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[key],debug=True)
+    else:
+        s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[], debug=True)
+    for i,chunk in enumerate(chunkify(ops, chunksize=chunksize)):
+        tx = TransactionBuilder(steemd_instance=s, no_broadcast=no_broadcast)
+        while True:
+            try:
+                tx.appendOps([operations.DelegateVestingShares(**op) for op in chunk])
+                tx.appendSigner('steem','active')
+                tx.sign()
+                print(json.dumps(tx))
+                if not no_broadcast:
+                    tx.broadcast()
+                    logger.debug('broadcasted tx #%s',i)
+                break
+            except KeyboardInterrupt:
+                raise KeyboardInterrupt
+            except Exception as e:
+                logger.exception('Ignored this error')
 
-    print('getting accounts from steemd, be patient...')
-    steemd_accounts = get_steem_accounts_from_names(accounts)
 
-    print('computing undelegation ops...')
-    ops, steem_ops = get_undelegation_ops(steemd_accounts)
 
-    show_undelegation_stats(ops)
-    return ops, steem_ops
+def main(key=None, ops=None, show_stats=False, no_broadcast=True):
+    if not ops:
+        print('getting accounts from steemd, be patient...')
+        steemd_accounts = it.chain.from_iterable(get_accounts_from_steemd())
+
+        print('computing undelegation ops...')
+        ops, steem_ops = get_undelegation_ops(steemd_accounts)
+
+    if show_stats:
+        show_undelegation_stats(ops)
+
+    build_and_sign(ops=ops,key=key,no_broadcast=no_broadcast)
+
 
 
 if __name__ == '__main__':
-    main()
+
+    parser = argparse.ArgumentParser('Steemit de-delegation script')
+    parser.add_argument('--wif', type=argparse.FileType('r'))
+    parser.add_argument('--ops', type=argparse.FileType('r'))
+    parser.add_argument('--stats', type=bool, default=False)
+    parser.add_argument('--no_broadcast', type=bool, default=True)
+    args = parser.parse_args()
+    if args.ops:
+        ops = json.load(args.ops)
+    else:
+        ops = args.ops
+    main(key=args.wif,
+         ops=ops,
+         show_stats=args.stats,
+         no_broadcast=args.no_broadcast)
