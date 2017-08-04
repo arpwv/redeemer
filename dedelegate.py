@@ -29,8 +29,7 @@ converter = steem.converter.Converter()
 DELEGATION_ACCOUNT_CREATOR = 'steem'
 DELEGATION_ACCOUNT_WIF = None
 INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 15 # in sp
-TRANSACTION_EXPIRATION = 60 * 60 * 24 # 1 day
-OPS_PER_TRANSACTION = 100
+TRANSACTION_EXPIRATION = 60 # 1 min
 STEEMD_NODES = ['https://steemd.steemit.com']
 
 INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
@@ -329,7 +328,7 @@ def build_and_sign(ops=None,key=None, no_broadcast=True, signing_start=None, exp
     if key:
         s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[key], debug=True)
     else:
-        s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[None], debug=True, unsigned=not key)
+        s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[None], debug=True)
 
     for group_num, op_group in enumerate(group_ops(ops)):
         error_count = 0
@@ -346,10 +345,14 @@ def build_and_sign(ops=None,key=None, no_broadcast=True, signing_start=None, exp
                 if key:
                     tx.sign()
                     if not no_broadcast:
-                        tx.broadcast()
-                        logger.debug('broadcasted group:%s start:%s end:%s len:%s size:%s',
+                        result = tx.broadcast()
+                        logger.debug('broadcasted group:%s start:%s end:%s len:%s size:%s result:%s',
                                      group_num, start_op_index, end_op_index, group_len,
-                                     group_size)
+                                     group_size, result)
+                    else:
+                        logger.debug('skipping broadcast of tx because no_broadcast=%s', no_broadcast)
+                else:
+                    logger.debug('skipping signing of tx because no key provided')
                 print(json.dumps(tx))
                 break
             except KeyboardInterrupt:
@@ -377,7 +380,7 @@ def main(delegation_type='undelegation',key=None, ops=None, show_stats=False, no
         if show_stats:
             show_delegation_stats(op_metrics, delegation_type=delegation_type)
 
-    build_and_sign(ops=ops,key=key,no_broadcast=no_broadcast, signing_start=signing_start)
+    build_and_sign(ops=ops, key=key, no_broadcast=no_broadcast, signing_start=signing_start)
 
 
 if __name__ == '__main__':
@@ -390,12 +393,15 @@ if __name__ == '__main__':
     parser.add_argument('--no_broadcast', type=bool, default=True)
     parser.add_argument('--signing_start_index', type=int, default=0)
     args = parser.parse_args()
+    wif = None
+    if args.wif:
+        wif = args.wif.read().strip()
     if args.ops:
         ops = json.load(args.ops)
     else:
         ops = args.ops
     main(delegation_type=args.delegation_type,
-         key=args.wif,
+         key=wif,
          ops=ops,
          show_stats=args.stats,
          no_broadcast=args.no_broadcast,
