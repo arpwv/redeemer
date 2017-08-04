@@ -28,11 +28,11 @@ converter = steem.converter.Converter()
 # de-delegation config
 DELEGATION_ACCOUNT_CREATOR = 'steem'
 DELEGATION_ACCOUNT_WIF = None
-INCLUSIVE_LOWER_BALANCE_LIMIT_SP = Amount('15 SP')
+INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 15
 TRANSACTION_EXPIRATION = 60 # 1 min
 STEEMD_NODES = ['https://steemd.steemit.com']
 
-INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)
+INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
 MIN_UPDATE = converter.sp_to_vests(.2) # "account_creation_fee": "0.200 STEEM"
 MIN_DELEGATION = MIN_UPDATE * 10
 
@@ -99,7 +99,6 @@ def compute_delegation_ops(accounts, delegation_type=None):
         acct_vests = Amount(acct['vesting_shares'])
         delegated_vests = Amount(acct['received_vesting_shares'])
         beginning_balance = acct_vests + delegated_vests
-
         vests_to_delegate = INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS - beginning_balance
 
         # cant undelegate amount greater than current delegation
@@ -158,8 +157,8 @@ def compute_delegation_ops(accounts, delegation_type=None):
             if delegation_type == 'delegation':
                 pass
             
-        except AssertionError:
-            print(OperationMetric(name,
+        except AssertionError as e:
+            logger.exception('error %s, %s', e, OperationMetric(name,
                                               delegation_type,
                                               vests_to_delegate,
                                               op_vesting_shares,
