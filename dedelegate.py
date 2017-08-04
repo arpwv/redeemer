@@ -28,11 +28,11 @@ converter = steem.converter.Converter()
 # de-delegation config
 DELEGATION_ACCOUNT_CREATOR = 'steem'
 DELEGATION_ACCOUNT_WIF = None
-INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 15 # in sp
+INCLUSIVE_LOWER_BALANCE_LIMIT_SP = Amount('15 SP')
 TRANSACTION_EXPIRATION = 60 # 1 min
 STEEMD_NODES = ['https://steemd.steemit.com']
 
-INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
+INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)
 MIN_UPDATE = converter.sp_to_vests(.2) # "account_creation_fee": "0.200 STEEM"
 MIN_DELEGATION = MIN_UPDATE * 10
 
@@ -389,8 +389,8 @@ if __name__ == '__main__':
     parser.add_argument('--delegation_type', type=str, default='undelegation')
     parser.add_argument('--wif', type=argparse.FileType('r'))
     parser.add_argument('--ops', type=argparse.FileType('r'))
-    parser.add_argument('--stats', type=bool, default=False)
-    parser.add_argument('--no_broadcast', type=bool, default=True)
+    parser.add_argument('--stats', action='store_true')
+    parser.add_argument('--no_broadcast', action='store_true')
     parser.add_argument('--signing_start_index', type=int, default=0)
     args = parser.parse_args()
     wif = None
