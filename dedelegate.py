@@ -29,16 +29,21 @@ converter = steem.converter.Converter()
 DELEGATION_ACCOUNT_CREATOR = 'steem'
 DELEGATION_ACCOUNT_WIF = None
 INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 15 # in sp
-INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
 TRANSACTION_EXPIRATION = 60 * 60 * 24 # 1 day
 OPS_PER_TRANSACTION = 100
 STEEMD_NODES = ['https://steemd.steemit.com']
 
+INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
+MIN_UPDATE = converter.sp_to_vests(.2) # "account_creation_fee": "0.200 STEEM"
+MIN_DELEGATION = MIN_UPDATE * 10
 
+STEEMIT_MAX_BLOCK_SIZE = 65536 # "maximum_block_size": 65536
+MAX_OPS_GROUP_SIZE = int(STEEMIT_MAX_BLOCK_SIZE / 2)
 
 
 OperationMetric = namedtuple('OperationMetric', ['name',
-                                     'vests_to_undelegate',
+                                     'delegation_type',
+                                     'vests_to_delegate',
                                      'op_vesting_shares',
                                      'acct_vests',
                                      'delegated_vests',
@@ -72,8 +77,22 @@ def print_table(*args, **kwargs):
     print()
 
 
-def compute_undelegation_ops(accounts):
-    # remove all but INCLUSIVE_LOWER_BALANCE_LIMIT_SP, or leave all
+def group_ops(ops, max_size=MAX_OPS_GROUP_SIZE, max_len=300):
+    group_size = 0
+    group = []
+    for op in ops:
+        op_size = len(json.dumps(op))
+        if group_size + op_size > max_size or len(group) == max_len:
+            yield group
+            group = [op]
+            group_size = op_size
+        else:
+            group.append(op)
+            group_size += op_size
+    yield group
+
+
+def compute_delegation_ops(accounts, delegation_type=None):
     op_metrics = []
     steem_ops = []
     for acct in accounts:
@@ -82,51 +101,105 @@ def compute_undelegation_ops(accounts):
         delegated_vests = Amount(acct['received_vesting_shares'])
         beginning_balance = acct_vests + delegated_vests
 
-        # nothing there
-        if delegated_vests == 0:
-            continue
-
-        vests_to_undelegate = beginning_balance - INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS
+        vests_to_delegate = INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS - beginning_balance
 
         # cant undelegate amount greater than current delegation
-        if vests_to_undelegate > delegated_vests:
-            vests_to_undelegate = delegated_vests
+        if vests_to_delegate < 0 and abs(float(vests_to_delegate)) > delegated_vests:
+            vests_to_delegate =  -1.0 * float(delegated_vests)
+            vests_to_delegate = Amount('%s VESTS' % vests_to_delegate)
 
-        ending_delegated = delegated_vests - vests_to_undelegate
+        # skip delegations less than minimum_update
+        if abs(float(vests_to_delegate)) < MIN_UPDATE:
+            continue
+
+        if vests_to_delegate < 0:
+            delegation_type = 'undelegation'
+        elif vests_to_delegate > 0:
+            delegation_type = 'delegation'
+        elif vests_to_delegate == 0:
+            continue
+        else:
+            raise ValueError(vests_to_delegate)
+
+        # optionally ignore a certain delegation_type
+        if delegation_type != delegation_type:
+            continue
+
+        ending_delegated = delegated_vests + vests_to_delegate
 
         # amount to specify in delegation operation
-        op_vesting_shares = delegated_vests - vests_to_undelegate
+        op_vesting_shares = delegated_vests + vests_to_delegate
 
-        # check limit
-        ending_balance = beginning_balance - vests_to_undelegate
-        assert ending_balance >= INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS
+        # skip delegations less than minimum_delegation
+        if op_vesting_shares < MIN_DELEGATION:
+            continue
+
+
+        ending_balance = beginning_balance + vests_to_delegate
+
+        try:
+            # sanity checks
+
+            # never delegate more than min
+            assert op_vesting_shares <= INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS
+
+            # no action leaves anyone with less than min
+            assert ending_balance >= INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS
+
+            # no updates less then min_update
+            assert abs(float(op_vesting_shares - delegated_vests)) >= MIN_UPDATE
+
+            assert op_vesting_shares >= MIN_DELEGATION
+
+            # no action undelegates more than delegation
+            if delegation_type == 'undelegation':
+                assert delegated_vests > 0
+                assert abs(float(vests_to_delegate)) <= delegated_vests
+            
+            if delegation_type == 'delegation':
+                pass
+            
+        except AssertionError:
+            print(OperationMetric(name,
+                                              delegation_type,
+                                              vests_to_delegate,
+                                              op_vesting_shares,
+                                              acct_vests,
+                                              delegated_vests,
+                                              beginning_balance,
+                                              ending_balance,
+                                              ending_delegated))
+            continue
 
         steem_ops.append(operations.DelegateVestingShares(
-                delegator=DELEGATION_ACCOUNT_CREATOR,
-                vesting_shares=str(op_vesting_shares),
-                delegatee=name
-        ))
+                    delegator=DELEGATION_ACCOUNT_CREATOR,
+                    vesting_shares=str(op_vesting_shares),
+                    delegatee=name
+            ).json())
         op_metrics.append(OperationMetric(name,
-                                   vests_to_undelegate,
-                                   op_vesting_shares,
-                                   acct_vests,
-                                   delegated_vests,
-                                   beginning_balance,
-                                   ending_balance,
-                                   ending_delegated))
+                                              delegation_type,
+                                              vests_to_delegate,
+                                              op_vesting_shares,
+                                              acct_vests,
+                                              delegated_vests,
+                                              beginning_balance,
+                                              ending_balance,
+                                              ending_delegated))
+
     return op_metrics, steem_ops
+
 
 # ----------------------
 # Main Program Functions
 # ----------------------
 
 # step 1
-def get_accounts_from_steemd(account='steem'):
+def get_accounts_from_steemd(account='steem', max_accounts=1000, batch_size=100):
     steem = Steem(nodes=STEEMD_NODES, no_broadcast=True)
     total_transactions_in_account = steem.get_account_history(account,-1,1)[0][0]
     logger.debug('total transactions for %s account to review: %s', account, total_transactions_in_account)
     offset = -1
-    limit = 10000
+
     results_count = 0
     offset_path = (0,0)
     op_path = (1,'op',0)
@@ -134,80 +207,90 @@ def get_accounts_from_steemd(account='steem'):
     while True:
         logger.debug('result count: %s offset:%s',results_count, offset)
         try:
-            r = steem.get_account_history(account, offset, limit)
+            r = steem.get_account_history(account, offset, batch_size)
             results_count += len(r)
             ops = filter(lambda o: get_in(op_path,o)=='account_create_with_delegation', r)
             account_names = [get_in(account_path,o) for o in ops]
-            logger.debug('filtered %s ops to %s account names', limit, len(account_names))
+            logger.debug('filtered %s ops to %s account names', batch_size, len(account_names))
             logger.debug('fetching %s accounts from steemd', len(account_names))
             if account_names:
                 accounts = steem.get_accounts(account_names)
                 if not accounts:
                     continue
                 yield accounts
+            if results_count >= max_accounts:
+                break
             offset = get_in(offset_path, r) - 1
             if offset <= 1:
                 break
-            if offset < limit:
-                offset = limit
+            if offset < batch_size:
+                offset = batch_size
         except Exception as e:
             logger.exception('Ignoring this error')
 
 # step 2
-def get_undelegation_ops(steemd_accounts):
+def get_delegation_ops(steemd_accounts, delegation_type=None):
     # compute undelegation operations
-    ops, steem_ops = compute_undelegation_ops(steemd_accounts)
-    with open('delegation_ops.json', 'w') as f:
-        json.dump([op.json() for op in steem_ops], f)
-    return ops, steem_ops
+    op_metrics, steem_ops = compute_delegation_ops(steemd_accounts, delegation_type=delegation_type)
+    with open('%s_ops.json' % delegation_type,'w') as f:
+        json.dump(steem_ops, f)
+    return op_metrics, steem_ops
+
 
 
 # step 3
-def show_undelegation_stats(op_metrics):
-    print('min acct balance after undelegation %s SP (%s)' % (
+def show_delegation_stats(op_metrics, delegation_type=None):
+    print('min acct balance after delegation %s SP (%s)' % (
     INCLUSIVE_LOWER_BALANCE_LIMIT_SP, INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS))
 
     table_data = [
-        ['undelegation ops', len(op_metrics)],
+        ['delegation ops', len([o for o in op_metrics if o.delegation_type == 'delegation'])],
+        ['undelegation ops', len([o for o in op_metrics if o.delegation_type == 'undelegation'])],
         ['complete undelegations ops', len([op for op in op_metrics if op.op_vesting_shares == 0])],
         ['partial undelegations ops', len([op for op in op_metrics if op.op_vesting_shares > 0])]
     ]
-    print_table(table_data=table_data, title='Undelegation Op Stats')
+    print_table(table_data=table_data, title='%s Op Stats' % delegation_type.title())
 
-    total_vests_to_undelegate = sum(int(op.vests_to_undelegate) for op in op_metrics)
-    mean_vests_to_undelegate = statistics.mean(int(op.vests_to_undelegate) for op in op_metrics)
-    median_vests_to_undelegate = statistics.median(int(op.vests_to_undelegate) for op in op_metrics)
+    total_vests_to_delegate = sum(int(op.vests_to_delegate) for op in op_metrics)
+    mean_vests_to_delegate = statistics.mean(int(op.vests_to_delegate) for op in op_metrics)
+    median_vests_to_delegate = statistics.median(int(op.vests_to_delegate) for op in op_metrics)
     try:
-        mode_vests_to_undelegate = statistics.mode(int(op.vests_to_undelegate) for op in op_metrics)
+        mode_vests_to_delegate = statistics.mode(int(op.vests_to_delegate) for op in op_metrics)
     except Exception as e:
-        mode_vests_to_undelegate = 'n/a'
+        mode_vests_to_delegate = 'n/a'
+
+    verb = 'undelegated'
+    if delegation_type == 'delegation':
+        verb = 'delegated'
+
+
 
     table_data = [
         ['Metric','VESTS', 'SP'],
-        ['total to be undelegated', total_vests_to_undelegate],
-        ['mean to be undelegated', mean_vests_to_undelegate],
-        ['median to be undelegated', median_vests_to_undelegate],
-        ['mode to be undelegated', mode_vests_to_undelegate],
+        ['total to be %s' % verb, total_vests_to_delegate],
+        ['mean to be %s' % verb, mean_vests_to_delegate],
+        ['median to be %s' % verb, median_vests_to_delegate],
+        ['mode to be %s' % verb, mode_vests_to_delegate],
     ]
 
     for row in table_data[1:]:
         row.append(converter.vests_to_sp(row[1]))
 
-    print_table(table_data=table_data, title='Undelegation Stats')
+    print_table(table_data=table_data, title='%s Stats' % delegation_type.title())
 
     # before/after stats
     mean_acct_balance_before = statistics.mean(
             int(op.beginning_balance) for op in op_metrics)
-    median_acct_balance_before = statistics.median(
+    median_acct_balance_before =  statistics.median(
             int(op.beginning_balance) for op in op_metrics)
 
 
-    mean_acct_balance_after = statistics.mean(
+    mean_acct_balance_after =  statistics.mean(
             int(op.ending_balance) for op in op_metrics)
-    median_acct_balance_after = statistics.median(
+    median_acct_balance_after =  statistics.median(
             int(op.ending_balance) for op in op_metrics)
 
-    mean_delegated_before =  statistics.mean(int(op.delegated_vests) for op in op_metrics)
+    mean_delegated_before =   statistics.mean(int(op.delegated_vests) for op in op_metrics)
 
     median_delegated_before = statistics.median(int(op.delegated_vests) for op in op_metrics)
 
@@ -222,6 +305,7 @@ def show_undelegation_stats(op_metrics):
 
     count_zero_delegated_before = len([op for op in op_metrics if op.delegated_vests == 0])
     count_zero_delegated_after = len([op for op in op_metrics if op.ending_delegated == 0])
+    
     table_data = [
         ['Metric','Before', 'After'],
         ['min acct balance', min(int(op.beginning_balance) for op in op_metrics), min(int(op.ending_balance) for op in op_metrics)],
@@ -238,60 +322,81 @@ def show_undelegation_stats(op_metrics):
     print_table(table_data=table_data, title='Before/After Acct Stats')
 
 
-def build_and_sign(ops=None, key=None, chunksize=OPS_PER_TRANSACTION, no_broadcast=True):
+
+def build_and_sign(ops=None,key=None, no_broadcast=True, signing_start=None, expiration=TRANSACTION_EXPIRATION):
     from steem.transactionbuilder import TransactionBuilder
     from steembase import operations
     if key:
-        s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[key],debug=True)
+        s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[key], debug=True)
     else:
-        s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[], debug=True)
-    for i,chunk in enumerate(chunkify(ops, chunksize=chunksize)):
-        tx = TransactionBuilder(steemd_instance=s, no_broadcast=no_broadcast)
+        s = Steem(nodes=STEEMD_NODES, no_broadcast=no_broadcast, keys=[None], debug=True, unsigned=not key)
+
+    for group_num, op_group in enumerate(group_ops(ops)):
+        error_count = 0
+        start_op_index = ops.index(op_group[0]) + signing_start
+        end_op_index = ops.index(op_group[-1]) + signing_start
+        logger.debug('group:%s start:%s end:%s', group_num, start_op_index, end_op_index)
         while True:
+            group_size = len(json.dumps(op_group))
+            group_len = len(op_group)
             try:
-                tx.appendOps([operations.DelegateVestingShares(**op) for op in chunk])
-                tx.appendSigner('steem','active')
-                tx.sign()
+                tx = TransactionBuilder(steemd_instance=s, no_broadcast=no_broadcast, expiration=expiration)
+                tx.appendOps([operations.DelegateVestingShares(**op) for op in op_group])
+                tx.appendSigner(DELEGATION_ACCOUNT_CREATOR, 'active')
+                if key:
+                    tx.sign()
+                    if not no_broadcast:
+                        tx.broadcast()
+                        logger.debug('broadcasted group:%s start:%s end:%s len:%s size:%s',
+                                     group_num, start_op_index, end_op_index, group_len,
+                                     group_size)
                 print(json.dumps(tx))
-                if not no_broadcast:
-                    tx.broadcast()
-                    logger.debug('broadcasted tx #%s',i)
                 break
             except KeyboardInterrupt:
                 raise KeyboardInterrupt
             except Exception as e:
-                logger.exception('Ignored this error')
+                error_count += 1
+                logger.exception('Error while broadcasting')
+
+                if error_count == 3:
+                    with open('error_%s_ops_start_%s_end%s.json' % (group_num, start_op_index, end_op_index), 'w') as f:
+                        json.dump(op_group, f)
+                    with open('error_%s.txt' % group_num, 'w') as f:
+                        f.write('%s' % e.__repr__())
+                    break
 
 
-
-def main(key=None, ops=None, show_stats=False, no_broadcast=True):
+def main(delegation_type='undelegation',key=None, ops=None, show_stats=False, no_broadcast=True, signing_start=0):
     if not ops:
         print('getting accounts from steemd, be patient...')
         steemd_accounts = it.chain.from_iterable(get_accounts_from_steemd())
 
         print('computing undelegation ops...')
-        ops, steem_ops = get_undelegation_ops(steemd_accounts)
+        op_metrics, ops = get_delegation_ops(steemd_accounts, delegation_type=delegation_type)
 
-    if show_stats:
-        show_undelegation_stats(ops)
+        if show_stats:
+            show_delegation_stats(op_metrics, delegation_type=delegation_type)
 
-    build_and_sign(ops=ops,key=key,no_broadcast=no_broadcast)
-
+    build_and_sign(ops=ops,key=key,no_broadcast=no_broadcast, signing_start=signing_start)
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('Steemit de-delegation script')
+    parser.add_argument('--delegation_type', type=str, default='undelegation')
     parser.add_argument('--wif', type=argparse.FileType('r'))
     parser.add_argument('--ops', type=argparse.FileType('r'))
     parser.add_argument('--stats', type=bool, default=False)
     parser.add_argument('--no_broadcast', type=bool, default=True)
+    parser.add_argument('--signing_start_index', type=int, default=0)
     args = parser.parse_args()
     if args.ops:
         ops = json.load(args.ops)
     else:
         ops = args.ops
-    main(key=args.wif,
+    main(delegation_type=args.delegation_type,
+         key=args.wif,
          ops=ops,
          show_stats=args.stats,
-         no_broadcast=args.no_broadcast)
+         no_broadcast=args.no_broadcast,
+         signing_start=args.signing_start_index)
