@@ -110,8 +110,5 @@ envd
 # mysql
 my.cnf
 
-# pipenv
-Pipfile.lock
-
 # notebooks
 *.ipynb
