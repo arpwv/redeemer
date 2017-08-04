@@ -194,7 +194,7 @@ def compute_delegation_ops(accounts, delegation_type=None):
 # ----------------------
 
 # step 1
-def get_accounts_from_steemd(account='steem', max_accounts=1000, batch_size=100):
+def get_accounts_from_steemd(account='steem', max_accounts=100000000, batch_size=10000):
     steem = Steem(nodes=STEEMD_NODES, no_broadcast=True)
     total_transactions_in_account = steem.get_account_history(account,-1,1)[0][0]
     logger.debug('total transactions for %s account to review: %s', account, total_transactions_in_account)
