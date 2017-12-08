@@ -381,9 +381,9 @@ def main(delegation_type='undelegation',key=None, ops=None, show_stats=False, no
 
 if __name__ == '__main__':
 
-    parser = configargparse.ArgumentParser('Steemit de-delegation script')
-    parser.add_argument('--delegation_type', type=str, default='undelegation')
-    parser.add_argument('--wif', type=configargparse.FileType('r'), help="The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.")
+    parser = configargparse.ArgumentParser('redeemer', formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter)
+    parser.add_argument('--delegation_type', type=str, help='The type of delegation to perform.', default='undelegation')
+    parser.add_argument('--wif', type=configargparse.FileType('r'), help='The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.')
     parser.add_argument('--ops', type=configargparse.FileType('r'))
     parser.add_argument('--stats', action='store_true')
     parser.add_argument('--no_broadcast', action='store_true')
