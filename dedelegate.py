@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 # coding=utf-8
-import argparse
+import configargparse
 import os
 import json
 import itertools as it
@@ -19,9 +19,7 @@ import steem.converter
 from steembase import operations
 from steem.amount import Amount
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
 
 converter = steem.converter.Converter()
 
@@ -195,7 +193,7 @@ def compute_delegation_ops(accounts, delegation_type=None):
 def get_accounts_from_steemd(account='steem', max_accounts=100000000, batch_size=10000):
     steem = Steem(nodes=STEEMD_NODES, no_broadcast=True)
     total_transactions_in_account = steem.get_account_history(account,-1,1)[0][0]
-    logger.debug('total transactions for %s account to review: %s', account, total_transactions_in_account)
+    logger.info('total transactions for %s account to review: %s', account, total_transactions_in_account)
     offset = -1
 
     results_count = 0
@@ -203,7 +201,7 @@ def get_accounts_from_steemd(account='steem', max_accounts=100000000, batch_size
     op_path = (1,'op',0)
     account_path = (1,'op',1,'new_account_name')
     while True:
-        logger.debug('result count: %s offset:%s',results_count, offset)
+        logger.info('result count: %s offset:%s',results_count, offset)
         try:
             r = steem.get_account_history(account, offset, batch_size)
             results_count += len(r)
@@ -260,8 +258,6 @@ def show_delegation_stats(op_metrics, delegation_type=None):
     verb = 'undelegated'
     if delegation_type == 'delegation':
         verb = 'delegated'
-
-
 
     table_data = [
         ['Metric','VESTS', 'SP'],
@@ -351,7 +347,7 @@ def build_and_sign(ops=None,key=None, no_broadcast=True, signing_start=None, exp
                     else:
                         logger.debug('skipping broadcast of tx because no_broadcast=%s', no_broadcast)
                 else:
-                    logger.debug('skipping signing of tx because no key provided')
+                    logger.warn('skipping signing of tx because no key provided')
                 print(json.dumps(tx))
                 break
             except KeyboardInterrupt:
@@ -370,31 +366,44 @@ def build_and_sign(ops=None,key=None, no_broadcast=True, signing_start=None, exp
 
 def main(delegation_type='undelegation',key=None, ops=None, show_stats=False, no_broadcast=True, signing_start=0):
     if not ops:
-        print('getting accounts from steemd, be patient...')
+        logger.info('getting accounts from steemd, be patient...')
         steemd_accounts = it.chain.from_iterable(get_accounts_from_steemd())
 
-        print('computing undelegation ops...')
+        logger.info('computing undelegation ops...')
         op_metrics, ops = get_delegation_ops(steemd_accounts, delegation_type=delegation_type)
 
         if show_stats:
             show_delegation_stats(op_metrics, delegation_type=delegation_type)
 
+    logger.info('building and signing transactions...')
     build_and_sign(ops=ops, key=key, no_broadcast=no_broadcast, signing_start=signing_start)
 
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser('Steemit de-delegation script')
-    parser.add_argument('--delegation_type', type=str, default='undelegation')
-    parser.add_argument('--wif', type=argparse.FileType('r'))
-    parser.add_argument('--ops', type=argparse.FileType('r'))
+    parser = configargparse.ArgumentParser('redeemer', formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter)
+    parser.add_argument('--delegation_type', type=str, help='The type of delegation to perform.', default='undelegation')
+    parser.add_argument('--wif', type=configargparse.FileType('r'), help='The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.')
+    parser.add_argument('--ops', type=configargparse.FileType('r'))
     parser.add_argument('--stats', action='store_true')
     parser.add_argument('--no_broadcast', action='store_true')
     parser.add_argument('--signing_start_index', type=int, default=0)
+    parser.add_argument('--log_level', type=str, default='INFO')
+
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.getLevelName(args.log_level))
+
     wif = None
     if args.wif:
+        logger.info('Using wif from file %s' % args.wif)
         wif = args.wif.read().strip()
+    elif os.environ.get('REDEEMER_WIF') is not None:
+        logger.info('Using wif from environment variable REDEEMER_WIF')
+        wif = os.environ.get('REDEEMER_WIF')
+    else:
+        logger.warn('You have not specified a wif; signing transactions is not possible!')
+
     if args.ops:
         ops = json.load(args.ops)
     else:
