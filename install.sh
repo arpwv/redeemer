@@ -8,7 +8,27 @@ SRC_DIR=/home/ubuntu/redeemer
 ssh -A ubuntu@${EC2_HOST} << SSHCMD
 set -e
 sudo apt-get update
-sudo apt-get install python3-pip libssl-dev
+sudo apt-get install -y \
+    build-essential \
+    checkinstall \
+    daemontools \
+    git \
+    libbz2-dev \
+    libc6-dev \
+    libffi-dev \
+    libgdbm-dev \
+    libmysqlclient-dev \
+    libncursesw5-dev \
+    libreadline-gplv2-dev \
+    libsqlite3-dev \
+    libssl-dev \
+    libxml2-dev \
+    libxslt-dev \
+    libssl-dev \
+    make \
+    tk-dev \
+    wget
+
 sudo rm -rf /home/ubuntu/redeemer
 sudo rm -f /etc/cron.daily/dedelegate.sh
 git clone git@github.com:steemit/redeemer.git
