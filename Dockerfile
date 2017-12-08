@@ -15,6 +15,4 @@ ADD Pipfile Pipfile.lock ./
 RUN pipenv install
 ADD . .
 
-# run cron in the foreground
-# keeps docker container from exiting
-CMD /usr/sbin/cron -f /etc/cron.d/redeemer-cron
+ENTRYPOINT [ "pipenv", "run", "/usr/src/app/dedelegate.py" ]
