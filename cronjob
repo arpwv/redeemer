@@ -1,2 +1,0 @@
-0 22 * * * root pipenv run /usr/src/app/dedelegate.py
-# empty line for valid crontab file

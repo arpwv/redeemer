@@ -5,8 +5,13 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-ADD cronjob /etc/cron.d/redeemer-cron
-RUN chmod 0644 /etc/cron.d/redeemer-cron
+ADD daily-redeem-delegations.cron /etc/cron.d/daily-redeem-delegations
+RUN chmod 0644 /etc/cron.d/daily-redeem-delegations
+
+ADD run-redeemer-from-cron.sh /usr/local/bin/run-redeemer-from-cron.sh
+RUN chmod +x /usr/local/bin/run-redeemer-from-cron.sh
+
+RUN touch /var/log/messages
 
 RUN pip install pipenv
 
