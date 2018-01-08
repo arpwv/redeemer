@@ -21,6 +21,12 @@ from steem.amount import Amount
 
 logger = logging.getLogger(__name__)
 
+# config-prep
+STEEMD_NODES = ['https://api.steemit.com']
+steemd = Steem(nodes=STEEMD_NODES)
+steem.instance.set_shared_steemd_instance(steemd)
+chain_props = steemd.get_chain_properties()
+account_creation_fee = Amount(chain_props['account_creation_fee']).amount
 converter = steem.converter.Converter()
 
 # de-delegation config
@@ -28,14 +34,15 @@ DELEGATION_ACCOUNT_CREATOR = 'steem'
 DELEGATION_ACCOUNT_WIF = None
 INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 15
 TRANSACTION_EXPIRATION = 60 # 1 min
-STEEMD_NODES = ['https://api.steemit.com']
-
+STEEM_PER_VEST = steem.converter.Converter().steem_per_mvests() / 1e6
 INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
-MIN_UPDATE = converter.sp_to_vests(.2) # "account_creation_fee": "0.200 STEEM"
+
+# min_update: https://github.com/steemit/steem/blob/56c4d8991622541381df4658bae4b90157690bf4/libraries/chain/steem_evaluator.cpp#L2179
+MIN_UPDATE = converter.sp_to_vests(account_creation_fee)
 MIN_DELEGATION = MIN_UPDATE * 10
 
-STEEMIT_MAX_BLOCK_SIZE = 65536 # "maximum_block_size": 65536
-MAX_OPS_GROUP_SIZE = int(STEEMIT_MAX_BLOCK_SIZE / 2)
+STEEMIT_MAX_BLOCK_SIZE = int(chain_props['maximum_block_size'])
+MAX_OPS_GROUP_SIZE = int(STEEMIT_MAX_BLOCK_SIZE / 16)
 
 
 OperationMetric = namedtuple('OperationMetric', ['name',
