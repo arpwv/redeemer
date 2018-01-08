@@ -42,10 +42,10 @@ if args.dry_run:
 delegator = Delegator(logger=logger)
 
 while True:
-  last_idx = -1
+  last_idx = ""
   while True:
     try:
-      logger.info("at index %d", last_idx)
+      logger.info("at index %s", last_idx)
       results, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
       gather_stats(results)
       if len(results) == 0:

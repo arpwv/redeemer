@@ -10,7 +10,7 @@ from steem.transactionbuilder import TransactionBuilder
 
 class Delegator(object):
 
-  def __init__(self, steem=None, limit=10000, logger=logging.NullHandler):
+  def __init__(self, steem=None, limit=1000, logger=logging.NullHandler):
       if steem is None:
         dry_run = True
         self.steem = Steem(nodes=['https://api.steemit.com'])
@@ -22,11 +22,14 @@ class Delegator(object):
       INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 15
       self.INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(self.converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
 
-  def get_delegated_accounts(self, account, last_idx=-1):
-      ops = self.steem.get_account_history(account, last_idx, self.limit)      
-      account_names = [ o[1]['op'][1]['new_account_name'] for o in ops if o[1]['op'][0]=='account_create_with_delegation' ]
+  def get_delegated_accounts(self, account, last_idx=0):
+      results = self.steem.get_vesting_delegations(account, last_idx, self.limit)
+      account_names = [result['delegatee'] for result in results] 
       accounts = self.steem.get_accounts(account_names)
-      return ([ account for account in accounts if self.is_delegated(account) ], ops[0][0])
+      for i, account in enumerate(accounts):
+        account['vesting_shares_from_delegator'] = results[i]['vesting_shares']
+        
+      return (accounts, account_names[len(account_names)-1])
 
   def vests_to_delegate(self, acct):
       name = acct['name']
@@ -41,10 +44,6 @@ class Delegator(object):
           v = Amount('%s VESTS' % v)
 
       return v
-
-  def is_delegated(self, account):
-      delegation_amount = self.vests_to_delegate(account)
-      return delegation_amount < Amount('0 VESTS')
 
   def get_delegation_op(self, delegator_account_name, account):
       return operations.DelegateVestingShares(
