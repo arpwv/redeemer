@@ -26,13 +26,13 @@ args = parser.parse_args()
 logger = logging.getLogger("redeemer")
 logging.basicConfig(level=logging.getLevelName(args.log_level))
 
-wif = None
+wifs = []
 if args.wif:
     logger.info('Using wif from file %s' % args.wif)
-    wif = args.wif.read().strip()
+    wifs = args.wif.read().strip().split(':')
 elif os.environ.get('REDEEMER_WIF') is not None:
     logger.info('Using wif from environment variable REDEEMER_WIF')
-    wif = os.environ.get('REDEEMER_WIF')
+    wifs = os.environ.get('REDEEMER_WIF').strip().split(':')
 else:
     logger.warn('You have not specified a wif; signing transactions is not possible!')
 
@@ -46,7 +46,7 @@ while True:
   while True:
     try:
       logger.info("at index %d", last_idx)
-      results, last_idx = dedelegator.dedelegate(args.account, last_idx=last_idx, dry_run=args.dry_run)
+      results, last_idx = dedelegator.dedelegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
       gather_stats(results)
       if len(results) == 0:
         break

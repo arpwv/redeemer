@@ -51,18 +51,19 @@ class Dedelegator(object):
           delegator=delegator_account_name,
           vesting_shares=str(self.vests_to_dedelegate(account)),
           delegatee=account['name']
-      )
+      )    
  
-  def dedelegate(self, delegator_account_name, last_idx, expiration=60, dry_run=True):
+  def dedelegate(self, delegator_account_name, last_idx, expiration=60, dry_run=True, wifs=[]):
     accounts, last_idx = self.get_delegated_accounts(delegator_account_name, last_idx=last_idx)
     if len(accounts) == 0:
       return ([], last_idx)
     dedelegation_ops = [ self.get_dedelegation_op(delegator_account_name, account) for account in accounts ]
     tx = TransactionBuilder(steemd_instance=self.steem, expiration=expiration)
     tx.appendOps(dedelegation_ops)
-    if not dry_run:
-      tx.appendSigner(delegator_account_name, 'active')
+    [ tx.appendWif(wif) for wif in wifs ]
+    if len(wifs) is not 0:
       tx.sign()
+    if not dry_run:
       result = tx.broadcast()
       self.logger.info('transaction broadcast. result: %s', result)
     return (
