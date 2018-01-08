@@ -174,7 +174,7 @@ def compute_delegation_ops(accounts, delegation_type=None):
                                               ending_delegated))
             continue
 
-        print("%sDELEGATE: adjust %s vesting shares from %.2f to %.2f"
+        logger.info("%sDELEGATE: adjust %s vesting shares from %.2f to %.2f"
               % ("UN" if delegated_vests < op_vesting_shares else "",
                  name, STEEM_PER_VEST * delegated_vests.amount,
                  STEEM_PER_VEST * op_vesting_shares.amount))
