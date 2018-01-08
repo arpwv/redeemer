@@ -203,37 +203,29 @@ def compute_delegation_ops(accounts, delegation_type=None):
 # ----------------------
 
 # step 1
-def get_accounts_from_steemd(account='steem', max_accounts=100000000, batch_size=10000):
+def get_accounts_from_steemd(account='steem'):
     steem = Steem(nodes=STEEMD_NODES, no_broadcast=True)
-    total_transactions_in_account = steem.get_account_history(account,-1,1)[0][0]
-    logger.info('total transactions for %s account to review: %s', account, total_transactions_in_account)
-    offset = -1
+    logger.info('loading delegations from @%s to review.', account)
 
+    offset = ""
     results_count = 0
-    offset_path = (0,0)
-    op_path = (1,'op',0)
-    account_path = (1,'op',1,'new_account_name')
     while True:
         logger.info('result count: %s offset:%s',results_count, offset)
         try:
-            r = steem.get_account_history(account, offset, batch_size)
-            results_count += len(r)
-            ops = filter(lambda o: get_in(op_path,o)=='account_create_with_delegation', r)
-            account_names = [get_in(account_path,o) for o in ops]
-            logger.debug('filtered %s ops to %s account names', batch_size, len(account_names))
-            logger.debug('fetching %s accounts from steemd', len(account_names))
-            if account_names:
-                accounts = steem.get_accounts(account_names)
-                if not accounts:
-                    continue
-                yield accounts
-            if results_count >= max_accounts:
+            results = steem.get_vesting_delegations(account, offset, 1000)
+            account_names = [result['delegatee'] for result in results]
+
+            if offset:
+                account_names.pop(0) # when using offset, shift first entry
+            if not account_names:
                 break
-            offset = get_in(offset_path, r) - 1
-            if offset <= 1:
-                break
-            if offset < batch_size:
-                offset = batch_size
+            offset = account_names[-1]
+            results_count += len(account_names)
+
+            logger.info('fetching %s accounts from steemd', len(account_names))
+            accounts = steem.get_accounts(account_names)
+            yield accounts
+
         except Exception as e:
             logger.exception('Ignoring this error')
 
