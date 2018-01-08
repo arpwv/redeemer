@@ -28,7 +28,7 @@ DELEGATION_ACCOUNT_CREATOR = 'steem'
 DELEGATION_ACCOUNT_WIF = None
 INCLUSIVE_LOWER_BALANCE_LIMIT_SP = 15
 TRANSACTION_EXPIRATION = 60 # 1 min
-STEEMD_NODES = ['https://steemd.steemit.com']
+STEEMD_NODES = ['https://api.steemit.com']
 
 INCLUSIVE_LOWER_BALANCE_LIMIT_VESTS = Amount('%s VESTS' % int(converter.sp_to_vests(INCLUSIVE_LOWER_BALANCE_LIMIT_SP)))
 MIN_UPDATE = converter.sp_to_vests(.2) # "account_creation_fee": "0.200 STEEM"
