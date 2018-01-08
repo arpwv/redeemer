@@ -15,7 +15,7 @@ parser.add_argument('--account', type=str, help='Account to perform delegations 
 parser.add_argument('--wif', type=configargparse.FileType('r'), help='An active WIF for account. The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.')
 parser.add_argument('--log_level', type=str, default='INFO')
 parser.add_argument('--dry_run', type=bool, default=True, help='Set this to false to actually broadcast transactions')
-parser.add_argument('--interval', type=int, default=60, help='Time in seconds to wait between polling for new delegations')
+parser.add_argument('--interval', type=int, default=60*60*2, help='Time in seconds to wait between polling for new delegations')
 
 args = parser.parse_args()
 
