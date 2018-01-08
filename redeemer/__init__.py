@@ -1,1 +1,1 @@
-from redeemer.dedelegator import Dedelegator
+from redeemer.delegator import Delegator

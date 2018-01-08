@@ -8,14 +8,14 @@ import logging
 import statistics
 import sys
 
-from redeemer import Dedelegator
+from redeemer import Delegator
 
 def gather_stats(results):
-  for (account, dedelegation_amount) in results:
+  for (account, delegation_amount) in results:
     pass   
 
 parser = configargparse.ArgumentParser('redeemer', formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter)
-parser.add_argument('--account', type=str, help='Account to perform dedelegations for')
+parser.add_argument('--account', type=str, help='Account to perform delegations for')
 parser.add_argument('--wif', type=configargparse.FileType('r'), help='An active WIF for account. The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.')
 parser.add_argument('--log_level', type=str, default='INFO')
 parser.add_argument('--dry_run', type=bool, default=True, help='Set this to false to actually broadcast transactions')
@@ -39,19 +39,19 @@ else:
 if args.dry_run:
   logger.warn("dry run mode; no transactions will be broadcast")
 
-dedelegator = Dedelegator(logger=logger)
+delegator = Delegator(logger=logger)
 
 while True:
   last_idx = -1
   while True:
     try:
       logger.info("at index %d", last_idx)
-      results, last_idx = dedelegator.dedelegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
+      results, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
       gather_stats(results)
       if len(results) == 0:
         break
     except Exception as e:
-      logger.exception("failed to dedelegate")
+      logger.exception("failed to delegate")
       break
   logger.info("Waiting %d seconds until the next run", args.interval)
   time.sleep(args.interval)

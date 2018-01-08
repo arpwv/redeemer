@@ -8,7 +8,7 @@ from steembase import operations
 from steem.amount import Amount
 from steem.transactionbuilder import TransactionBuilder
 
-class Dedelegator(object):
+class Delegator(object):
 
   def __init__(self, steem=None, limit=10000, logger=logging.NullHandler):
       if steem is None:
@@ -28,7 +28,7 @@ class Dedelegator(object):
       accounts = self.steem.get_accounts(account_names)
       return ([ account for account in accounts if self.is_delegated(account) ], ops[0][0])
 
-  def vests_to_dedelegate(self, acct):
+  def vests_to_delegate(self, acct):
       name = acct['name']
       acct_vests = Amount(acct['vesting_shares'])
       delegated_vests = Amount(acct['received_vesting_shares'])
@@ -43,23 +43,23 @@ class Dedelegator(object):
       return v
 
   def is_delegated(self, account):
-      dedelegation_amount = self.vests_to_dedelegate(account)
-      return dedelegation_amount < Amount('0 VESTS')
+      delegation_amount = self.vests_to_delegate(account)
+      return delegation_amount < Amount('0 VESTS')
 
-  def get_dedelegation_op(self, delegator_account_name, account):
+  def get_delegation_op(self, delegator_account_name, account):
       return operations.DelegateVestingShares(
           delegator=delegator_account_name,
-          vesting_shares=str(self.vests_to_dedelegate(account)),
+          vesting_shares=str(self.vests_to_delegate(account)),
           delegatee=account['name']
       )    
  
-  def dedelegate(self, delegator_account_name, last_idx, expiration=60, dry_run=True, wifs=[]):
+  def delegate(self, delegator_account_name, last_idx, expiration=60, dry_run=True, wifs=[]):
     accounts, last_idx = self.get_delegated_accounts(delegator_account_name, last_idx=last_idx)
     if len(accounts) == 0:
       return ([], last_idx)
-    dedelegation_ops = [ self.get_dedelegation_op(delegator_account_name, account) for account in accounts ]
+    delegation_ops = [ self.get_delegation_op(delegator_account_name, account) for account in accounts ]
     tx = TransactionBuilder(steemd_instance=self.steem, expiration=expiration)
-    tx.appendOps(dedelegation_ops)
+    tx.appendOps(delegation_ops)
     [ tx.appendWif(wif) for wif in wifs ]
     if len(wifs) is not 0:
       tx.sign()
@@ -67,7 +67,7 @@ class Dedelegator(object):
       result = tx.broadcast()
       self.logger.info('transaction broadcast. result: %s', result)
     return (
-      [(account, self.vests_to_dedelegate(account)) for account in accounts ],
+      [(account, self.vests_to_delegate(account)) for account in accounts ],
       last_idx
     )
 

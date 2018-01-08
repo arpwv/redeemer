@@ -9,4 +9,4 @@ ADD Pipfile Pipfile.lock ./
 RUN pipenv install
 ADD . .
 
-ENTRYPOINT [ "pipenv", "run", "./dedelegate.py" ]
+ENTRYPOINT [ "pipenv", "run", "./delegate.py" ]
