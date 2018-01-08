@@ -174,6 +174,12 @@ def compute_delegation_ops(accounts, delegation_type=None):
                                               ending_delegated))
             continue
 
+        print("%sDELEGATE: adjust %s vesting shares from %.2f to %.2f"
+              % ("UN" if delegated_vests < op_vesting_shares else "",
+                 name, STEEM_PER_VEST * delegated_vests.amount,
+                 STEEM_PER_VEST * op_vesting_shares.amount))
+
+
         steem_ops.append(operations.DelegateVestingShares(
                     delegator=DELEGATION_ACCOUNT_CREATOR,
                     vesting_shares=str(op_vesting_shares),
@@ -371,8 +377,8 @@ def build_and_sign(ops=None,key=None, no_broadcast=True, signing_start=None, exp
                     break
 
 
-def main(delegation_type='undelegation',key=None, ops=None, show_stats=False, no_broadcast=True, signing_start=0):
-    if not ops:
+def main(delegation_type='undelegation',key=None, show_stats=False, no_broadcast=True, signing_start=0):
+    while True:
         logger.info('getting accounts from steemd, be patient...')
         steemd_accounts = it.chain.from_iterable(get_accounts_from_steemd())
 
@@ -382,8 +388,11 @@ def main(delegation_type='undelegation',key=None, ops=None, show_stats=False, no
         if show_stats:
             show_delegation_stats(op_metrics, delegation_type=delegation_type)
 
-    logger.info('building and signing transactions...')
-    build_and_sign(ops=ops, key=key, no_broadcast=no_broadcast, signing_start=signing_start)
+        logger.info('building and signing transactions...')
+        build_and_sign(ops=ops, key=key, no_broadcast=no_broadcast, signing_start=signing_start)
+
+        logger.info('sleeping for 30 minutes...')
+        time.sleep(30 * 60)
 
 
 if __name__ == '__main__':
@@ -413,11 +422,14 @@ if __name__ == '__main__':
 
     if args.ops:
         ops = json.load(args.ops)
+        logger.info('building and signing transactions...')
+        build_and_sign(ops=ops,
+            key=wif,
+            no_broadcast=args.no_broadcast,
+            signing_start=args.signing_start_index)
     else:
-        ops = args.ops
-    main(delegation_type=args.delegation_type,
-         key=wif,
-         ops=ops,
-         show_stats=args.stats,
-         no_broadcast=args.no_broadcast,
-         signing_start=args.signing_start_index)
+        main(delegation_type=args.delegation_type,
+             key=wif,
+             show_stats=args.stats,
+             no_broadcast=args.no_broadcast,
+             signing_start=args.signing_start_index)
