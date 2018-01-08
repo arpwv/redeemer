@@ -51,12 +51,6 @@ class Delegator(object):
       if delta > 0:
           return None # do not increase steemit delegation
 
-      print("% -17s from % 7.2f to % 7.2f -- % 7.2f" % (
-          name,
-          old_delegated_vests * self.STEEM_PER_VEST,
-          new_delegated_vests * self.STEEM_PER_VEST,
-          delta * self.STEEM_PER_VEST))
-
       return "%.6f VESTS" % new_delegated_vests
 
   def get_delegation_op(self, delegator_account_name, account):
@@ -85,7 +79,7 @@ class Delegator(object):
       result = tx.broadcast()
       self.logger.info('transaction broadcast. result: %s', result)
     return (
-      [(account, self.vests_to_delegate(account)) for account in accounts ],
+      [(account, self.vests_to_delegate(account)) for account in accounts if self.vests_to_delegate(account) is not None],
       last_idx
     )
 

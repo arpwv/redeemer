@@ -39,16 +39,19 @@ delegator = Delegator(logger=logger)
 
 while True:
   last_idx = ""
+  stats = Stats()
   while True:
     try:
       logger.info("at index %s", last_idx)
       results, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
-      gather_stats(results)
+      for result in results:
+        stats.add(result[0]['name'], result[0]['vesting_shares_from_delegator'], result[1]) 
       if len(results) == 0:
         break
     except Exception as e:
       logger.exception("failed to delegate")
       break
+    logger.info("%s", stats.get())
   logger.info("Waiting %d seconds until the next run", args.interval)
   time.sleep(args.interval)
 
