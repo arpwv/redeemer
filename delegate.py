@@ -8,11 +8,7 @@ import logging
 import statistics
 import sys
 
-from redeemer import Delegator
-
-def gather_stats(results):
-  for (account, delegation_amount) in results:
-    pass   
+from redeemer import Delegator, Stats
 
 parser = configargparse.ArgumentParser('redeemer', formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter)
 parser.add_argument('--account', type=str, help='Account to perform delegations for')
