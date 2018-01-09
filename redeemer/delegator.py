@@ -60,7 +60,7 @@ class Delegator(object):
         new_delegated_vests = 0
       elif new_delegated_vests == 0 and old_delegated_vests < self.MIN_VESTS:
         # fix invalids: must bump them above the range before we take them to 0
-        new_delegated_vests = old_delegated_vests + self.MIN_VESTS
+        new_delegated_vests = max(self.MIN_VESTS, old_delegated_vests + self.MIN_VESTS_DELTA)
 
 
       delta = new_delegated_vests - old_delegated_vests
