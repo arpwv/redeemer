@@ -6,18 +6,19 @@ Redeemer is operating normally.
 
 Following are some statistics from the last 24 hours of operation:
 
-TOTAL ACCOUNTS ADJUSTED: %(total_accounts_handled)
-TOTAL REDEEMED: %(total_vests_redeemed) VESTS
-MEAN REDEMPTION PER ACCOUNT: %(mean_vests_redeemed) VESTS
-MODE OF REDEMPTION: %(mode_vests_redeemed) VESTS
-SINGLE LARGEST REDEMPTION: %(single_largest_redeemed_vests.account), at %(single_largest_redeemed_vests.amount) VESTS
+TOTAL ACCOUNTS ADJUSTED: %(total_accounts_handled)s
+TOTAL REDEEMED: %(total_vests_redeemed)s VESTS
+MEAN REDEMPTION PER ACCOUNT: %(mean_vests_redeemed)s VESTS
+MODE OF REDEMPTION: %(mode_vests_redeemed)s VESTS
 
 Remember that I am a robot and cannot answer your emails.
 
 Sincerely,
+
 Redeemer
 
 -------------------------
+
 Tu redimes me, si me hostes interceperint? -- Plautus.
 """
 
@@ -33,9 +34,11 @@ This message will repeat until the error is corrected.
 Remember that I am a robot and cannot answer your emails.
 
 Sincerely,
+
 Redeemer
 
 --------------------------
+
 Nec te pugnantem tua, Cyllare, forma redemit. -- Ovid.
 """
 
