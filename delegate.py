@@ -59,14 +59,10 @@ def log_stats(*args):
 
 signal.signal(signal.SIGUSR1, log_stats)
 
-deplorables = get_deplorables(args.deplorables_url)
-logger.info("%d deplorables loaded", len(deplorables))
-
 send_messages_to = []
 if args.send_messages_to is not None and args.send_messages_to != "":
   send_messages_to = args.send_messages_to.split(",")
 notifier = Notifier(args.sendgrid_api_key, send_messages_to)
-delegator = Delegator(logger=logger, deplorables=deplorables)
 stats = Stats()
 
 last_email_time = 0
@@ -77,6 +73,9 @@ while True:
 
   try:
     in_run = True
+    deplorables = get_deplorables(args.deplorables_url)
+    logger.info("%d deplorables loaded", len(deplorables))
+    delegator = Delegator(logger=logger, deplorables=deplorables)
     last_idx = ""
     while True:
       deltas, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=(args.dry_run == 1), wifs=wifs)
