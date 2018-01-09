@@ -13,7 +13,7 @@ from redeemer import Delegator, Stats, Notifier, get_deplorables
 
 parser = configargparse.ArgumentParser('redeemer', formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter)
 parser.add_argument('--sendgrid_api_key', default=None, type=str, help='api key to use Sendgrid to send notification messages', env_var="SENDGRID_API_KEY")
-parser.add_argument('--send_messages_to', default=None, type=str, help='email address to send messages to', env_var="SEND_MESSAGES_TO")
+parser.add_argument('--send_messages_to', default=None, type=str, help='comma-separated list of email addresses to send messages to', env_var="SEND_MESSAGES_TO")
 parser.add_argument('--notification_interval', default=86400, type=int, help='time in seconds between status emails', env_var="NOTIFICATION_INTERVAL")
 parser.add_argument('--account', type=str, help='Account to perform delegations for', env_var="ACCOUNT")
 parser.add_argument('--wif', type=configargparse.FileType('r'), help='An active WIF for account. The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.')
@@ -61,7 +61,7 @@ signal.signal(signal.SIGUSR1, log_stats)
 deplorables = get_deplorables(args.deplorables_url)
 logger.info("%d deplorables loaded", len(deplorables))
 
-notifier = Notifier(args.sendgrid_api_key, args.send_messages_to)
+notifier = Notifier(args.sendgrid_api_key, args.send_messages_to.split(","))
 delegator = Delegator(logger=logger, deplorables=deplorables)
 stats = Stats()
 

@@ -40,7 +40,7 @@ Nec te pugnantem tua, Cyllare, forma redemit. -- Ovid.
 """
 
 class Notifier(object):
-  def __init__(self, sendgrid_api_key=None, send_messages_to=None):
+  def __init__(self, sendgrid_api_key=None, send_messages_to=[]):
     self.send_messages_to = send_messages_to
 
     self.send_emails = False
@@ -52,11 +52,7 @@ class Notifier(object):
     return {
         "personalizations": [
           {
-            "to": [
-              {
-                "email": self.send_messages_to
-              }
-            ],
+            "to": [ { "email": email } for email in self.send_messages_to ],
             "subject": subject
           }
         ],
