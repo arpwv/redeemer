@@ -10,7 +10,7 @@ from steem.transactionbuilder import TransactionBuilder
 
 class Delegator(object):
 
-  MIN_ACCOUNT_SP = 15
+  TARGET_SP = 15
 
   def __init__(self, steem=None, limit=1000, logger=logging.NullHandler, deplorables=None):
       if steem is None:
@@ -27,8 +27,9 @@ class Delegator(object):
       self.limit = limit
       self.logger = logger
       self.STEEM_PER_VEST = Decimal(Converter(self.steem).steem_per_mvests() / 1e6) # TODO: check Converter. float math?
-      self.MIN_ACCOUNT_VESTS = self.MIN_ACCOUNT_SP / self.STEEM_PER_VEST
+      self.TARGET_VESTS = self.TARGET_SP / self.STEEM_PER_VEST
       self.MIN_VESTS_DELTA = 204.84 # TODO: chain_props['account_creation_fee'] / self.STEEM_PER_VEST
+      self.MIN_VESTS = self.MIN_VESTS_DELTA * 10
 
   def get_delegated_accounts(self, account, last_idx=''):
       results = self.steem.get_vesting_delegations(account, last_idx, self.limit)
@@ -52,7 +53,15 @@ class Delegator(object):
       if name in self.deplorables:
         new_delegated_vests = 0
       else:
-        new_delegated_vests = max(0, self.MIN_ACCOUNT_VESTS - account_vests)
+        new_delegated_vests = max(0, self.TARGET_VESTS - account_vests)
+
+      # accounts should never end up between (0, self.MIN_VESTS)
+      if new_delegated_vests > 0 and new_delegated_vests < self.MIN_VESTS:
+        new_delegated_vests = 0
+      elif new_delegated_vests == 0 and old_delegated_vests < self.MIN_VESTS:
+        # fix invalids: must bump them above the range before we take them to 0
+        new_delegated_vests = old_delegated_vests + self.MIN_VESTS
+
 
       delta = new_delegated_vests - old_delegated_vests
 
