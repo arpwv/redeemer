@@ -9,7 +9,7 @@ import logging
 import sys
 import signal
 
-from redeemer import Delegator, Stats, Notifier
+from redeemer import Delegator, Stats, Notifier, get_deplorables
 
 parser = configargparse.ArgumentParser('redeemer', formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter)
 parser.add_argument('--sendgrid_api_key', default=None, type=str, help='api key to use Sendgrid to send notification messages')
@@ -20,6 +20,7 @@ parser.add_argument('--wif', type=configargparse.FileType('r'), help='An active 
 parser.add_argument('--log_level', type=str, default='INFO')
 parser.add_argument('--dry_run', type=bool, default=True, help='Set this to false to actually broadcast transactions')
 parser.add_argument('--interval', type=int, default=60*60*2, help='Time in seconds to wait between polling for new delegations')
+parser.add_argument('--deplorables_url', default=None, type=str, help='url to retrieve list of deplorables from')
 
 args = parser.parse_args()
 
@@ -57,8 +58,11 @@ def log_stats(*args):
 
 signal.signal(signal.SIGUSR1, log_stats)
 
+deplorables = get_deplorables(args.deplorables_url)
+logger.info("%d deplorables loaded", len(deplorables))
+
 notifier = Notifier(args.sendgrid_api_key, args.send_messages_to)
-delegator = Delegator(logger=logger)
+delegator = Delegator(logger=logger, deplorables=deplorables)
 stats = Stats()
 
 last_email_time = 0

@@ -12,12 +12,17 @@ class Delegator(object):
 
   MIN_ACCOUNT_SP = 15
 
-  def __init__(self, steem=None, limit=1000, logger=logging.NullHandler):
+  def __init__(self, steem=None, limit=1000, logger=logging.NullHandler, deplorables=None):
       if steem is None:
         dry_run = True
         self.steem = Steem(nodes=['https://api.steemit.com'])
       else:
         self.steem = steem
+
+      if deplorables is not None:
+        self.deplorables = deplorables
+      else:
+        self.deplorables = set()
 
       self.limit = limit
       self.logger = logger
@@ -43,7 +48,11 @@ class Delegator(object):
       name = acct['name']
       account_vests = Decimal(acct['vesting_shares'].split(' ')[0])
       old_delegated_vests = Decimal(acct['vesting_shares_from_delegator'].split(' ')[0])
-      new_delegated_vests = max(0, self.MIN_ACCOUNT_VESTS - account_vests)
+      
+      if name in self.deplorables:
+        new_delegated_vests = 0
+      else:
+        new_delegated_vests = max(0, self.MIN_ACCOUNT_VESTS - account_vests)
 
       delta = new_delegated_vests - old_delegated_vests
 
