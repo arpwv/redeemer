@@ -57,10 +57,10 @@ while True:
   stats.reset()
   while True:
     try:
-      results, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
-      for result in results:
-        stats.add(result[0]['name'], result[0]['delegation_delta']) 
-      if len(results) == 0:
+      deltas, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
+      for delta in deltas:
+        stats.add(delta['name'], delta['delta_vests'])
+      if not deltas:
         break
     except Exception as e:
       logger.exception("FAILURE")
