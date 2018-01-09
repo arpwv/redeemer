@@ -5,8 +5,8 @@ import configargparse
 import os
 import json
 import logging
-import statistics
 import sys
+import signal
 
 from redeemer import Delegator, Stats
 
@@ -36,13 +36,27 @@ if args.dry_run:
   logger.warn("dry run mode; no transactions will be broadcast")
 
 delegator = Delegator(logger=logger)
+stats = Stats()
+last_idx = ""
+in_run = False
+
+logger.info("pid %d. send USR1 to get stats so far", os.getpid())
+
+def log_stats(*args):
+  if in_run:
+    logger.info("at index %s" % last_idx)
+    logger.info(stats.get())
+  else:
+    logger.info("Not running right now.")
+
+signal.signal(signal.SIGUSR1, log_stats)
 
 while True:
+  in_run = True
   last_idx = ""
-  stats = Stats()
+  stats.reset()
   while True:
     try:
-      logger.info("at index %s", last_idx)
       results, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
       for result in results:
         stats.add(result[0]['name'], result[0]['vesting_shares_from_delegator'], result[1]) 
@@ -51,7 +65,8 @@ while True:
     except Exception as e:
       logger.exception("failed to delegate")
       break
-    logger.info("%s", stats.get())
+  log_stats()
+  in_run = False
   logger.info("Waiting %d seconds until the next run", args.interval)
   time.sleep(args.interval)
 

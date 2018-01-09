@@ -18,10 +18,8 @@ Sphinx = "*"
 jupyter = "*"
 
 [packages]
-toolz = "*"
 pycrypto = "*"
 steem = "*"
-terminaltables = "*"
 configargparse = "*"
 
 [requires]

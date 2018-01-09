@@ -5,13 +5,16 @@ from steem.amount import Amount
 
 class Stats:
   def __init__(self, mode_factor=1000):
+    self.mode_factor = Decimal(mode_factor)
+    self.reset()
+
+  def reset(self):
     self.total_redeemed_vests = Decimal(0)
     self.total_accounts_handled = Decimal(0)
     self.mean_redeemed_vests = Decimal(0)
     self.mode_redeemed_vests = 0
     self.single_largest_redeemed_vests = ('', Decimal(0))
     self._mode = defaultdict(int)
-    self.mode_factor = Decimal(mode_factor)
 
   def add(self, account_name, old_vesting_amount, new_vesting_amount):
     delta = Decimal(old_vesting_amount.split(' ')[0]) - Decimal(new_vesting_amount.split(' ')[0])
