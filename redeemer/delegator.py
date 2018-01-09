@@ -28,7 +28,7 @@ class Delegator(object):
       self.logger = logger
       self.STEEM_PER_VEST = Decimal(Converter(self.steem).steem_per_mvests() / 1e6) # TODO: check Converter. float math?
       self.TARGET_VESTS = self.TARGET_SP / self.STEEM_PER_VEST
-      self.MIN_VESTS_DELTA = 204.84 # TODO: chain_props['account_creation_fee'] / self.STEEM_PER_VEST
+      self.MIN_VESTS_DELTA = Decimal(204.84) # TODO: chain_props['account_creation_fee'] / self.STEEM_PER_VEST
       self.MIN_VESTS = self.MIN_VESTS_DELTA * 10
 
   def get_delegated_accounts(self, account, last_idx=''):
