@@ -18,12 +18,13 @@ parser.add_argument('--notification_interval', default=86400, type=int, help='ti
 parser.add_argument('--account', type=str, help='Account to perform delegations for', env_var="ACCOUNT")
 parser.add_argument('--wif', type=configargparse.FileType('r'), help='An active WIF for account. The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.')
 parser.add_argument('--log_level', type=str, default='INFO', env_var="LOG_LEVEL")
-parser.add_argument('--dry_run', type=bool, default=True, help='Set this to false to actually broadcast transactions', env_var="DRY_RUN")
+parser.add_argument('--dry_run', type=int, default=1, help='Set this to 0 to actually broadcast transactions', env_var="DRY_RUN")
 parser.add_argument('--interval', type=int, default=60*60*2, help='Time in seconds to wait between polling for new delegations', env_var="INTERVAL")
 parser.add_argument('--deplorables_url', default=None, type=str, help='url to retrieve list of deplorables from', env_var="DEPLORABLES_URL")
 
 args = parser.parse_args()
 
+print(args)
 logger = logging.getLogger("redeemer")
 logging.basicConfig(level=logging.getLevelName(args.log_level))
 
@@ -44,7 +45,7 @@ elif not args.send_messages_to:
 else:
   logger.warn('No sendgrid key supplied, no messages will be sent')
 
-if args.dry_run:
+if args.dry_run == 1:
   logger.warn("dry run mode; no transactions will be broadcast")
 
 logger.info("pid %d. send USR1 to get stats so far", os.getpid())
@@ -78,7 +79,7 @@ while True:
     in_run = True
     last_idx = ""
     while True:
-      deltas, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
+      deltas, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=(args.dry_run == 1), wifs=wifs)
       if not deltas:
         break
       for delta in deltas:
