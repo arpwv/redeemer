@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 # coding=utf-8
+import traceback
 import time
 import configargparse
 import os
@@ -8,9 +9,12 @@ import logging
 import sys
 import signal
 
-from redeemer import Delegator, Stats
+from redeemer import Delegator, Stats, Notifier
 
 parser = configargparse.ArgumentParser('redeemer', formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter)
+parser.add_argument('--sendgrid_api_key', default=None, type=str, help='api key to use Sendgrid to send notification messages')
+parser.add_argument('--send_messages_to', default=None, type=str, help='email address to send messages to')
+parser.add_argument('--notification_interval', default=86400, type=int, help='time in seconds between status emails')
 parser.add_argument('--account', type=str, help='Account to perform delegations for')
 parser.add_argument('--wif', type=configargparse.FileType('r'), help='An active WIF for account. The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.')
 parser.add_argument('--log_level', type=str, default='INFO')
@@ -32,13 +36,15 @@ elif os.environ.get('REDEEMER_WIF') is not None:
 else:
     logger.warn('You have not specified a wif; signing transactions is not possible!')
 
+if args.sendgrid_api_key and args.send_messages_to:
+  logger.info('Using sendgrid to send notification emails to %s', args.send_messages_to)
+elif not args.send_messages_to:
+  logger.warn('No send_messages_to address supplied, no messages will be sent')
+else:
+  logger.warn('No sendgrid key supplied, no messages will be sent')
+
 if args.dry_run:
   logger.warn("dry run mode; no transactions will be broadcast")
-
-delegator = Delegator(logger=logger)
-stats = Stats()
-last_idx = ""
-in_run = False
 
 logger.info("pid %d. send USR1 to get stats so far", os.getpid())
 
@@ -51,22 +57,36 @@ def log_stats(*args):
 
 signal.signal(signal.SIGUSR1, log_stats)
 
+notifier = Notifier(args.sendgrid_api_key, args.send_messages_to)
+delegator = Delegator(logger=logger)
+stats = Stats()
+
+last_email_time = 0
+last_idx = ""
+in_run = False
+
 while True:
-  in_run = True
-  last_idx = ""
-  stats.reset()
-  while True:
-    try:
+
+  try:
+    in_run = True
+    last_idx = ""
+    while True:
       results, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
       for result in results:
         stats.add(result[0]['name'], result[0]['delegation_delta']) 
       if len(results) == 0:
         break
-    except Exception as e:
-      logger.exception("FAILURE")
-      break
-  log_stats()
+    log_stats()
+    if time.time() - last_email_time > args.notification_interval:
+      logger.info("sending status email")
+      notifier.notify_stats(stats.get())
+      last_email_time = time.time() 
+      stats.reset()
+
+  except Exception as e:
+    logger.exception("RUN FAILED")
+    notifier.notify_error(traceback.format_exc())
+  
   in_run = False
   logger.info("Waiting %d seconds until the next run", args.interval)
   time.sleep(args.interval)
-

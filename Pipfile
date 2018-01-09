@@ -3,13 +3,16 @@ url = "https://pypi.python.org/simple"
 verify_ssl = true
 
 [dev-packages]
+
 ipython = "*"
-pep8 = "*"
-autopep8 = "*"
+"pep8" = "*"
+"autopep8" = "*"
 
 [packages]
+
 steem = "*"
 configargparse = "*"
+sendgrid = "*"
 
 [requires]
 python_version = "3.6"
