@@ -45,7 +45,7 @@ class Notifier(object):
 
     self.send_emails = False
     if sendgrid_api_key is not None and send_messages_to is not None:
-      self.sg = SendGridAPIClient(apikey=args.sendgrid_api_key)
+      self.sg = SendGridAPIClient(apikey=sendgrid_api_key)
       self.send_emails = True
 
   def get_request_body(self, subject, template, template_args):
