@@ -51,6 +51,8 @@ class Delegator(object):
       if delta > 0:
           return None # do not increase steemit delegation
 
+      acct['delegation_delta'] = delta
+
       return "%.6f VESTS" % new_delegated_vests
 
   def get_delegation_op(self, delegator_account_name, account):

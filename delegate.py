@@ -59,11 +59,11 @@ while True:
     try:
       results, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
       for result in results:
-        stats.add(result[0]['name'], result[0]['vesting_shares_from_delegator'], result[1]) 
+        stats.add(result[0]['name'], result[0]['delegation_delta']) 
       if len(results) == 0:
         break
     except Exception as e:
-      logger.exception("failed to delegate")
+      logger.exception("FAILURE")
       break
   log_stats()
   in_run = False
