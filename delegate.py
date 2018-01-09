@@ -61,7 +61,10 @@ signal.signal(signal.SIGUSR1, log_stats)
 deplorables = get_deplorables(args.deplorables_url)
 logger.info("%d deplorables loaded", len(deplorables))
 
-notifier = Notifier(args.sendgrid_api_key, args.send_messages_to.split(","))
+send_messages_to = []
+if args.send_messages_to is not None and args.send_messages_to != "":
+  send_messages_to = args.send_messages_to.split(",")
+notifier = Notifier(args.sendgrid_api_key, send_messages_to)
 delegator = Delegator(logger=logger, deplorables=deplorables)
 stats = Stats()
 
