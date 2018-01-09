@@ -12,15 +12,15 @@ import signal
 from redeemer import Delegator, Stats, Notifier, get_deplorables
 
 parser = configargparse.ArgumentParser('redeemer', formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter)
-parser.add_argument('--sendgrid_api_key', default=None, type=str, help='api key to use Sendgrid to send notification messages')
-parser.add_argument('--send_messages_to', default=None, type=str, help='email address to send messages to')
-parser.add_argument('--notification_interval', default=86400, type=int, help='time in seconds between status emails')
-parser.add_argument('--account', type=str, help='Account to perform delegations for')
+parser.add_argument('--sendgrid_api_key', default=None, type=str, help='api key to use Sendgrid to send notification messages', env_var="SENDGRID_API_KEY")
+parser.add_argument('--send_messages_to', default=None, type=str, help='email address to send messages to', env_var="SEND_MESSAGES_TO")
+parser.add_argument('--notification_interval', default=86400, type=int, help='time in seconds between status emails', env_var="NOTIFICATION_INTERVAL")
+parser.add_argument('--account', type=str, help='Account to perform delegations for', env_var="ACCOUNT")
 parser.add_argument('--wif', type=configargparse.FileType('r'), help='An active WIF for account. The flag expects a path to a file. The environment variable REDEEMER_WIF will be checked for a literal WIF also.')
-parser.add_argument('--log_level', type=str, default='INFO')
-parser.add_argument('--dry_run', type=bool, default=True, help='Set this to false to actually broadcast transactions')
-parser.add_argument('--interval', type=int, default=60*60*2, help='Time in seconds to wait between polling for new delegations')
-parser.add_argument('--deplorables_url', default=None, type=str, help='url to retrieve list of deplorables from')
+parser.add_argument('--log_level', type=str, default='INFO', env_var="LOG_LEVEL")
+parser.add_argument('--dry_run', type=bool, default=True, help='Set this to false to actually broadcast transactions', env_var="DRY_RUN")
+parser.add_argument('--interval', type=int, default=60*60*2, help='Time in seconds to wait between polling for new delegations', env_var="INTERVAL")
+parser.add_argument('--deplorables_url', default=None, type=str, help='url to retrieve list of deplorables from', env_var="DEPLORABLES_URL")
 
 args = parser.parse_args()
 
