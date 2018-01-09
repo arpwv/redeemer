@@ -24,7 +24,6 @@ parser.add_argument('--deplorables_url', default=None, type=str, help='url to re
 
 args = parser.parse_args()
 
-print(args)
 logger = logging.getLogger("redeemer")
 logging.basicConfig(level=logging.getLevelName(args.log_level))
 
