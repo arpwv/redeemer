@@ -79,8 +79,6 @@ while True:
     last_idx = ""
     while True:
       deltas, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=(args.dry_run == 1), wifs=wifs)
-      if not deltas:
-        break
       for delta in deltas:
         stats.add(delta['name'], delta['delta_vests'])
     log_stats()

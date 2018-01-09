@@ -94,9 +94,12 @@ class Delegator(object):
           vesting_shares=delta['new_vests'],
           delegatee=delta['name']
       ))
+    if len(delegation_ops) == 0:
+      self.logger.info('no operations in this group to broadcast.')
+      return ([], last_idx)
 
     tx = TransactionBuilder(steemd_instance=self.steem, expiration=expiration)
-    tx.appendOps([op for op in delegation_ops if op])
+    tx.appendOps(delegation_ops)
     [ tx.appendWif(wif) for wif in wifs ]
     if len(wifs):
       tx.sign()
