@@ -55,13 +55,9 @@ class Delegator(object):
       else:
         new_delegated_vests = max(0, self.TARGET_VESTS - account_vests)
 
-      # accounts should never end up between (0, self.MIN_VESTS)
+      # if target vests are below minimum vests, round up.
       if new_delegated_vests > 0 and new_delegated_vests < self.MIN_VESTS:
-        new_delegated_vests = 0
-      elif new_delegated_vests == 0 and old_delegated_vests < self.MIN_VESTS:
-        # fix invalids: must bump them above the range before we take them to 0
-        new_delegated_vests = max(self.MIN_VESTS, old_delegated_vests + self.MIN_VESTS_DELTA)
-
+        new_delegated_vests = self.MIN_VESTS
 
       delta = new_delegated_vests - old_delegated_vests
 
