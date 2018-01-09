@@ -76,7 +76,7 @@ while True:
     logger.info("%d deplorables loaded", len(deplorables))
     delegator = Delegator(logger=logger, deplorables=deplorables)
     last_idx = ""
-    while True:
+    while last_idx is not None:
       deltas, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=(args.dry_run == 1), wifs=wifs)
       for delta in deltas:
         stats.add(delta['name'], delta['delta_vests'])

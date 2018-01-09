@@ -40,6 +40,8 @@ class Delegator(object):
 
       delegations = {r['delegatee']: r['vesting_shares'] for r in results}
       accounts = self.steem.get_accounts(list(delegations.keys()))
+      if accounts is None:
+        return ([], None) # end of the line, again
       for account in accounts:
         account['vesting_shares_from_delegator'] = delegations[account['name']]
 
