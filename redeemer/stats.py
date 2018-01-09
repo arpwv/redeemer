@@ -1,7 +1,6 @@
 
 from decimal import Decimal
 from collections import defaultdict
-from steem.amount import Amount
 
 class Stats:
   def __init__(self, mode_factor=1000):

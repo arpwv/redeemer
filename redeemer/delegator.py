@@ -21,16 +21,18 @@ class Delegator(object):
 
       self.limit = limit
       self.logger = logger
-      self.STEEM_PER_VEST = Decimal(Converter(self.steem).steem_per_mvests() / 1e6)
+      self.STEEM_PER_VEST = Decimal(Converter(self.steem).steem_per_mvests() / 1e6) # TODO: check Converter. float math?
       self.MIN_ACCOUNT_VESTS = self.MIN_ACCOUNT_SP / self.STEEM_PER_VEST
-      self.MIN_VESTS_DELTA = 204.84 # TODO: account_creation_fee / steem_per_vest
+      self.MIN_VESTS_DELTA = 204.84 # TODO: chain_props['account_creation_fee'] / self.STEEM_PER_VEST
 
   def get_delegated_accounts(self, account, last_idx=''):
       results = self.steem.get_vesting_delegations(account, last_idx, self.limit)
       if last_idx:
           results.pop(0) # if offset specified, shift result
-      delegations = {r['delegatee']: r['vesting_shares'] for r in results}
+      if not results:
+          return ([], None) # end of the line
 
+      delegations = {r['delegatee']: r['vesting_shares'] for r in results}
       accounts = self.steem.get_accounts(list(delegations.keys()))
       for account in accounts:
         account['vesting_shares_from_delegator'] = delegations[account['name']]
@@ -51,37 +53,38 @@ class Delegator(object):
       if delta > 0:
           return None # do not increase steemit delegation
 
-      acct['delegation_delta'] = delta
+      return {'name': name,
+              'shares': acct['vesting_shares'],
+              'delta_vests': delta,
+              'new_vests': "%.6f VESTS" % new_delegated_vests,
+              'old_vests': acct['vesting_shares_from_delegator']}
 
-      return "%.6f VESTS" % new_delegated_vests
+  def get_delegation_deltas(self, delegator_account_name, accounts):
+      deltas = [self.vests_to_delegate(account) for account in accounts]
+      return [item for item in deltas if item]
 
-  def get_delegation_op(self, delegator_account_name, account):
-      new_delegated_vests = self.vests_to_delegate(account)
-
-      if new_delegated_vests is None:
-          return None # no change
-
-      return operations.DelegateVestingShares(
-          delegator=delegator_account_name,
-          vesting_shares=new_delegated_vests,
-          delegatee=account['name']
-      )    
- 
   def delegate(self, delegator_account_name, last_idx, expiration=60, dry_run=True, wifs=[]):
     accounts, last_idx = self.get_delegated_accounts(delegator_account_name, last_idx=last_idx)
-    if len(accounts) == 0:
+    if not accounts:
       return ([], last_idx)
-    delegation_ops = [ self.get_delegation_op(delegator_account_name, account) for account in accounts ]
+
+    deltas = self.get_delegation_deltas(delegator_account_name, accounts)
+    delegation_ops = []
+    for delta in deltas:
+      delegation_ops.append(operations.DelegateVestingShares(
+          delegator=delegator_account_name,
+          vesting_shares=delta['new_vests'],
+          delegatee=delta['name']
+      ))
+
     tx = TransactionBuilder(steemd_instance=self.steem, expiration=expiration)
     tx.appendOps([op for op in delegation_ops if op])
     [ tx.appendWif(wif) for wif in wifs ]
-    if len(wifs) is not 0:
+    if len(wifs):
       tx.sign()
+
     if not dry_run:
       result = tx.broadcast()
       self.logger.info('transaction broadcast. result: %s', result)
-    return (
-      [(account, self.vests_to_delegate(account)) for account in accounts if self.vests_to_delegate(account) is not None],
-      last_idx
-    )
 
+    return (deltas, last_idx)

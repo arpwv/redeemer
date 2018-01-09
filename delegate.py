@@ -71,11 +71,11 @@ while True:
     in_run = True
     last_idx = ""
     while True:
-      results, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
-      for result in results:
-        stats.add(result[0]['name'], result[0]['delegation_delta']) 
-      if len(results) == 0:
+      deltas, last_idx = delegator.delegate(args.account, last_idx=last_idx, dry_run=args.dry_run, wifs=wifs)
+      if not deltas:
         break
+      for delta in deltas:
+        stats.add(delta['name'], delta['delta_vests'])
     log_stats()
     if time.time() - last_email_time > args.notification_interval:
       logger.info("sending status email")
