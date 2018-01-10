@@ -116,9 +116,9 @@ last_idx = ""
 in_run = False
 
 while True:
+    in_run = True
 
     try:
-        in_run = True
         deplorables = get_deplorables(args.deplorables_url)
         logger.info("%d deplorables loaded", len(deplorables))
         delegator = Delegator(logger=logger, deplorables=deplorables)
@@ -141,5 +141,6 @@ while True:
         notifier.notify_error(traceback.format_exc())
 
     in_run = False
+    
     logger.info("Waiting %d seconds until the next run", args.interval)
     time.sleep(args.interval)

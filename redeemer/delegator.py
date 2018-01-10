@@ -44,10 +44,10 @@ class Delegator(object):
     def get_delegated_accounts(self, account, last_idx=''):
         results = self.steem.get_vesting_delegations(
             account, last_idx, self.limit)
+        if not results or (last_idx is None and len(results) == 0) or (last_idx is not None and len(results) == 1):
+            return ([], None)  # end of the line
         if last_idx:
             results.pop(0)  # if offset specified, shift result
-        if not results:
-            return ([], None)  # end of the line
 
         delegations = {r['delegatee']: r['vesting_shares'] for r in results}
         accounts = self.steem.get_accounts(list(delegations.keys()))

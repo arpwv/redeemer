@@ -3,7 +3,7 @@ from decimal import Decimal
 from collections import defaultdict
 
 
-class Stats:
+class Stats(object):
     def __init__(self, mode_factor=1000):
         self.mode_factor = Decimal(mode_factor)
         self.reset()
