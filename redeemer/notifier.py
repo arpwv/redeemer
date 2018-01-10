@@ -7,9 +7,9 @@ Redeemer is operating normally.
 Following are some statistics from the last 24 hours of operation:
 
 TOTAL ACCOUNTS ADJUSTED: %(total_accounts_handled)s
-TOTAL REDEEMED: %(total_vests_redeemed)s VESTS
-MEAN REDEMPTION PER ACCOUNT: %(mean_vests_redeemed)s VESTS
-MODE OF REDEMPTION: %(mode_vests_redeemed)s VESTS
+TOTAL REDEEMED: %(total_redeemed_vests)s VESTS
+MEAN REDEMPTION PER ACCOUNT: %(mean_redeemed_vests)s VESTS
+MODE OF REDEMPTION: %(mode_redeemed_vests)s VESTS
 
 Remember that I am a robot and cannot answer your emails.
 
