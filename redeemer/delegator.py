@@ -2,12 +2,12 @@ import logging
 from decimal import Decimal
 
 from steem import Steem
-from steem.steemd import Steemd
-from steem.instance import set_shared_steemd_instance
-from steem.converter import Converter
 from steembase import operations
 from steem.transactionbuilder import TransactionBuilder
 
+def amount(steem_amount):
+    # in: `3.000 STEEM`, out: Decimal('3.000')
+    return Decimal(steem_amount.split(' ')[0])
 
 class Delegator(object):
 
@@ -30,15 +30,20 @@ class Delegator(object):
         else:
             self.deplorables = set()
 
+        # info for steem/vest ratio
+        global_props = self.steem.get_dynamic_global_properties()
+        vesting_steem = amount(global_props['total_vesting_fund_steem'])
+        vesting_shares = amount(global_props['total_vesting_shares'])
+
+        # load dynamic acct creation fee
+        chain_props = self.steem.get_chain_properties()
+        account_creation_fee = amount(chain_props['account_creation_fee'])
+
         self.limit = limit
         self.logger = logger
-        self.STEEM_PER_VEST = Decimal(
-            Converter(
-                self.steem).steem_per_mvests() /
-            1e6)  # TODO: check Converter. float math?
+        self.STEEM_PER_VEST = vesting_steem / vesting_shares
         self.TARGET_VESTS = self.TARGET_SP / self.STEEM_PER_VEST
-        # TODO: chain_props['account_creation_fee'] / self.STEEM_PER_VEST
-        self.MIN_VESTS_DELTA = Decimal(204.84)
+        self.MIN_VESTS_DELTA = account_creation_fee / self.STEEM_PER_VEST
         self.MIN_VESTS = self.MIN_VESTS_DELTA * 10
 
     def get_delegated_accounts(self, account, last_idx=''):
