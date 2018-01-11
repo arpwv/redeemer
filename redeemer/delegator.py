@@ -44,15 +44,17 @@ class Delegator(object):
     def get_delegated_accounts(self, account, last_idx=''):
         results = self.steem.get_vesting_delegations(
             account, last_idx, self.limit)
-        if not results or (last_idx is None and len(results) == 0) or (last_idx is not None and len(results) == 1):
+
+        if last_idx and results and results[0]['delegatee'] == last_idx:
+            # if offset specified, we received results, and first result is the
+            #   previous request's last result, shift result.
+            results.pop(0)
+
+        if not results:
             return ([], None)  # end of the line
-        if last_idx:
-            results.pop(0)  # if offset specified, shift result
 
         delegations = {r['delegatee']: r['vesting_shares'] for r in results}
         accounts = self.steem.get_accounts(list(delegations.keys()))
-        if accounts is None:
-            return ([], None)  # end of the line, again
         for account in accounts:
             account['vesting_shares_from_delegator'] = delegations[account['name']]
 
