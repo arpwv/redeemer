@@ -1,5 +1,0 @@
-LC_ALL=C.UTF-8
-LANG=C.UTF-8
-PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-0 22 * * * root /usr/local/bin/run-redeemer-from-cron.sh >> /var/log/messages 2>&1
-# empty line for valid crontab file
