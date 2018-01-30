@@ -60,8 +60,8 @@ class Delegator(object):
 
         delegations = {r['delegatee']: r['vesting_shares'] for r in results}
         accounts = self.steem.get_accounts(list(delegations.keys()))
-        for account in accounts:
-            account['vesting_shares_from_delegator'] = delegations[account['name']]
+        for acct in accounts:
+            acct['vesting_shares_from_delegator'] = delegations[acct['name']]
 
         return (accounts, results[-1]['delegatee'])
 
@@ -102,33 +102,32 @@ class Delegator(object):
                 'new_vests': "%.6f VESTS" % new_delegated_vests,
                 'old_vests': acct['vesting_shares_from_delegator']}
 
-    def get_delegation_deltas(self, delegator_account_name, accounts):
+    def get_delegation_deltas(self, accounts):
         deltas = [self.vests_to_delegate(account) for account in accounts]
         return [item for item in deltas if item]
 
     def delegate(
             self,
-            delegator_account_name,
+            delegator,
             last_idx,
             expiration=60,
             dry_run=True,
             wifs=[]):
-        accounts, last_idx = self.get_delegated_accounts(
-            delegator_account_name, last_idx=last_idx)
+        accounts, last_idx = self.get_delegated_accounts(delegator, last_idx)
         if not accounts:
             return ([], last_idx)
 
-        deltas = self.get_delegation_deltas(delegator_account_name, accounts)
+        deltas = self.get_delegation_deltas(accounts)
+        if not deltas:
+            return ([], last_idx)
+
         delegation_ops = []
         for delta in deltas:
             delegation_ops.append(operations.DelegateVestingShares(
-                delegator=delegator_account_name,
+                delegator=delegator,
                 vesting_shares=delta['new_vests'],
                 delegatee=delta['name']
             ))
-        if len(delegation_ops) == 0:
-            self.logger.info('no operations in this group to broadcast.')
-            return ([], last_idx)
 
         tx = TransactionBuilder(
             steemd_instance=self.steem,
