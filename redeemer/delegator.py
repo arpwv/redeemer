@@ -1,5 +1,6 @@
 import logging
 from decimal import Decimal
+from datetime import datetime
 
 from steem import Steem
 from steembase import operations
@@ -8,6 +9,10 @@ from steem.transactionbuilder import TransactionBuilder
 def amount(steem_amount):
     # in: `3.000 STEEM`, out: Decimal('3.000')
     return Decimal(steem_amount.split(' ')[0])
+
+def days_since(date):
+    interval = datetime.today() - datetime.strptime(date, '%Y-%m-%dT%H:%M:%S')
+    return interval.days
 
 class Delegator(object):
 
@@ -67,17 +72,25 @@ class Delegator(object):
 
     def vests_to_delegate(self, acct):
         name = acct['name']
-        account_vests = Decimal(acct['vesting_shares'].split(' ')[0])
-        old_delegated_vests = Decimal(
-            acct['vesting_shares_from_delegator'].split(' ')[0])
+        account_vests = amount(acct['vesting_shares'])
+        old_delegated_vests = amount(acct['vesting_shares_from_delegator'])
 
         if name in self.deplorables:
             new_delegated_vests = 0
+        elif account_vests == 0:
+            new_delegated_vests = self.MIN_VESTS
+        elif days_since(acct['last_bandwidth_update']) > 90:
+            _inactive_target = self.TARGET_VESTS / 3 - account_vests
+            new_delegated_vests = max(self.MIN_VESTS, _inactive_target)
         else:
             new_delegated_vests = max(0, self.TARGET_VESTS - account_vests)
 
+        has_powered_down = (amount(acct['vesting_withdraw_rate']) > 0.000001
+                            or int(acct['withdrawn']) > 0
+                            or int(acct['to_withdraw']) > 0)
+
         # do not process attempted increases in delegation
-        if new_delegated_vests > old_delegated_vests:
+        if has_powered_down and new_delegated_vests > old_delegated_vests:
             return None
 
         # if target vests are below minimum vests, round up.
